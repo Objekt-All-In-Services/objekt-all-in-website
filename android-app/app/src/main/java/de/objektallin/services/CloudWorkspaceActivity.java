@@ -57,7 +57,7 @@ public class CloudWorkspaceActivity extends Activity {
     @Override public void onCreate(Bundle bundle){
         super.onCreate(bundle);
         pref=getSharedPreferences(PREF,MODE_PRIVATE);
-        base=pref.getString("url","https://pqydohrjsuoxnzdoykgs.supabase.co");pub=pref.getString("key","sb_publishable_r6AKL_SLCbUI8Qw0U0GH8g_AUssip1T");
+        base="https://pqydohrjsuoxnzdoykgs.supabase.co";pub="sb_publishable_r6AKL_SLCbUI8Qw0U0GH8g_AUssip1T";
         readTokens();
         getWindow().setStatusBarColor(NAVY);
         getWindow().setNavigationBarColor(NAVY);
@@ -227,7 +227,10 @@ public class CloudWorkspaceActivity extends Activity {
         if(busy)return;busy=true;
         network.execute(()->{
             try {T result=task.run();runOnUiThread(()->{busy=false;if(!isFinishing())done.receive(result);});}
-            catch(Exception ex){String message=ex.getMessage();runOnUiThread(()->{busy=false;if(!isFinishing())new AlertDialog.Builder(this).setTitle("Verbindung / Berechtigung").setMessage(message).setPositiveButton("OK",null).show();});}
+            catch(Exception ex){String message=ex.getMessage();runOnUiThread(()->{busy=false;if(!isFinishing()){
+                if(access.isEmpty())loginScreen();
+                new AlertDialog.Builder(this).setTitle("Verbindung / Berechtigung").setMessage(message).setPositiveButton("OK",null).show();
+            }});}
         });
     }
     private String http(String path,String method,JSONObject payload,boolean authenticated) throws Exception {
@@ -249,9 +252,14 @@ public class CloudWorkspaceActivity extends Activity {
         String answer=new String(data,StandardCharsets.UTF_8);
         if(status==401 && authenticated && retry && !refresh.isEmpty()){
             JSONObject request=new JSONObject();request.put("refresh_token",refresh);
-            JSONObject newer=new JSONObject(http("/auth/v1/token?grant_type=refresh_token","POST",request,false,false));
-            saveTokens(newer);
-            return http(path,method,payload,true,false);
+            try {
+                JSONObject newer=new JSONObject(http("/auth/v1/token?grant_type=refresh_token","POST",request,false,false));
+                saveTokens(newer);
+                return http(path,method,payload,true,false);
+            } catch(Exception renewalError) {
+                clear();
+                throw new Exception("Deine Sitzung ist abgelaufen. Melde dich bitte erneut mit deiner E-Mail-Adresse und deinem Passwort an.");
+            }
         }
         if(status>=400)throw new Exception("Serverfehler "+status+": "+answer.substring(0,Math.min(200,answer.length())));
         return answer;
