@@ -34,6 +34,7 @@ import android.graphics.BitmapFactory;
 import android.net.Uri;
 import android.provider.OpenableColumns;
 import android.widget.Toast;
+import android.widget.CheckBox;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.UUID;
@@ -441,9 +442,11 @@ public class CloudWorkspaceActivity extends Activity {
             String type=r.optString("kind"),linked=r.optString("linked_order_id","");
             if(type.equals("Auftrag")){
                 // Zahlungen aus Aufträgen, soweit keine eigene Rechnung die Zahlungen führt.
-                if(!invoiced.contains(r.optString("id")))sum+=Math.min(
-                    Math.max(0,r.optLong("paid_cents")),
-                    Math.max(0,r.optLong("amount_cents")));
+                if(!invoiced.contains(r.optString("id"))){
+                    long paid=r.optLong("paid_cents");
+                    if("Bezahlt".equals(r.optString("status")))paid=r.optLong("amount_cents");
+                    sum+=Math.min(Math.max(0,paid),Math.max(0,r.optLong("amount_cents")));
+                }
             }else if(type.equals("Rechnung")){
                 sum+=Math.min(Math.max(0,r.optLong("paid_cents")),Math.max(0,r.optLong("amount_cents")));
             }else if(type.equals("Einnahme") && (linked.isEmpty()||linked.equals("null"))){
@@ -562,6 +565,8 @@ public class CloudWorkspaceActivity extends Activity {
             if(data!=null){TextView plate=text("Kennzeichen: "+data.optString("kennzeichen","–")+"  ·  HU: "+displayDate(data.optString("hu_date","")),13,false);
                 add(row,plate,7);}
             row.setOnClickListener(v->vehicleDetail(entry));
+        }else if(category.equals("Aufgabe")){
+            row.setOnClickListener(v->taskDetail(entry));
         }else row.setOnClickListener(v->editor(entry));
         add(main,row,11);
     }
@@ -797,6 +802,61 @@ public class CloudWorkspaceActivity extends Activity {
         },done->loadVehicleDocuments());
     }
 
+
+    private void taskDetail(JSONObject task){
+        shell("Aufgabe");
+        add(main,button("← Zurück zu Aufgaben",()->{detailKind="Aufgabe";render();}),0);
+        heading(task.optString("title","Aufgabe"),"Checkliste und Bearbeitungsstand.");
+        LinearLayout summary=card();
+        add(summary,text("Status: "+task.optString("status","Geplant"),15,true),0);
+        add(summary,text("Zuständig: "+assignmentName(task),13,false),10);
+        String d=displayDate(task.optString("due_date",""));
+        if(!d.isEmpty())add(summary,text("Termin: "+d,13,false),8);
+        String description=task.optString("details","");
+        if(!description.isEmpty())add(summary,text(description,14,false),12);
+        add(main,summary,15);
+        JSONObject meta=task.optJSONObject("metadata");
+        String raw=meta==null?"":meta.optString("checklist","");
+        String[] lines=raw.split("\\r?\\n");
+        JSONArray done=meta==null?new JSONArray():meta.optJSONArray("checklist_done");
+        if(done==null)done=new JSONArray();
+        Set<Integer> selected=new HashSet<>();
+        for(int i=0;i<done.length();i++)selected.add(done.optInt(i,-1));
+        LinearLayout checklist=card();
+        add(checklist,text("Checkliste",18,true),0);
+        java.util.List<CheckBox> boxes=new java.util.ArrayList<>();
+        if(raw.trim().isEmpty())add(checklist,text("Noch keine Checklistenpunkte. Du kannst sie über „Bearbeiten“ ergänzen.",13,false),10);
+        for(int i=0;i<lines.length;i++){
+            if(lines[i].trim().isEmpty())continue;
+            CheckBox box=new CheckBox(this);
+            box.setText(lines[i].trim());
+            box.setChecked(selected.contains(i));
+            box.setTag(i);
+            box.setTextColor(NAVY);
+            box.setTextSize(15);
+            add(checklist,box,10);
+            boxes.add(box);
+        }
+        add(main,checklist,14);
+        if(!boxes.isEmpty())add(main,goldButton("Checkliste speichern",()->{
+            JSONObject newer=new JSONObject();
+            try{
+                newer=new JSONObject(meta==null?"{}":meta.toString());
+                JSONArray values=new JSONArray();
+                for(CheckBox box:boxes)if(box.isChecked())values.put((Integer)box.getTag());
+                newer.put("checklist_done",values);
+            }catch(Exception ex){message("Checkliste konnte nicht vorbereitet werden.");return;}
+            JSONObject updatedMeta=newer;
+            launch(()->{
+                JSONObject payload=new JSONObject();payload.put("metadata",updatedMeta);
+                JSONObject args=new JSONObject();args.put("p_id",task.optString("id"));args.put("p_values",payload);
+                http("/rest/v1/rpc/update_record","POST",args,true);
+                return true;
+            },doneSave->{message("Checkliste gespeichert.");load();});
+        }),14);
+        add(main,button("Aufgabe bearbeiten",()->editor(task)),16);
+    }
+
     private String dateOrNull(JSONObject record,String key){
         if(record==null || record.isNull(key))return "";
         return record.optString(key,"");
@@ -954,8 +1014,9 @@ public class CloudWorkspaceActivity extends Activity {
         }
         Spinner orderLink=null;
         String[] linkIds=null;
-        if(invoice){
-            add(layout,text("Zugehöriger Auftrag (optional, verhindert doppelte offene Beträge)",12,true),17);
+        if(invoice||income){
+            add(layout,text(invoice?"Zugehöriger Auftrag (optional, verhindert doppelte offene Beträge)":
+                "Zugehöriger Auftrag (optional, damit Einnahmen nicht doppelt zählen)",12,true),17);
             int n=countKind("Auftrag");
             String[] names=new String[n+1];
             linkIds=new String[n+1];
@@ -1037,7 +1098,7 @@ public class CloudWorkspaceActivity extends Activity {
                 String assignment=fAssigned==null?"":fAssignIds[fAssigned.getSelectedItemPosition()];
                 payload.put("assigned_both",assignment.equals("BOTH"));
                 payload.put("assigned_to",assignment.isEmpty()||assignment.equals("BOTH")?JSONObject.NULL:assignment);
-                if(invoice){
+                if(invoice||income){
                     String linked=fLinkIds[fOrderLink.getSelectedItemPosition()];
                     payload.put("linked_order_id",linked.isEmpty()?JSONObject.NULL:linked);
                 }
