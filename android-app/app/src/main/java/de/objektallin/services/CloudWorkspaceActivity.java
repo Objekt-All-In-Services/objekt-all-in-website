@@ -29,6 +29,14 @@ import android.widget.Spinner;
 import android.widget.TextView;
 import android.widget.ImageView;
 import android.widget.CalendarView;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
+import android.net.Uri;
+import android.provider.OpenableColumns;
+import android.widget.Toast;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.util.UUID;
 import java.util.HashSet;
 import java.util.Set;
 import java.net.HttpURLConnection;
@@ -51,6 +59,11 @@ import org.json.JSONObject;
 public class CloudWorkspaceActivity extends Activity {
     private static final int NAVY=Color.rgb(7,30,56), GOLD=Color.rgb(210,163,78);
     private static final int BG=Color.rgb(244,247,251), MUTED=Color.rgb(102,118,132);
+    private static final int PICK_VEHICLE_IMAGE=5013;
+    private static final String DOC_BUCKET="objekt-fahrzeugakten";
+    private String selectedVehicleId="",selectedVehicleTitle="";
+    private JSONArray vehicleDocuments=new JSONArray();
+    private boolean vehicleDocumentsOpen=false;
     private static final String[] TABS={"Übersicht","Aufträge","Termine","Finanzen","Mehr"};
     private static final String PREF="cloud_workspace", KEY_ALIAS="objekt_all_in_cloud_tokens_v1";
     private static final String[] KINDS={"Auftrag","Aufgabe","Termin","Kunde","Angebot","Rechnung","Einnahme","Ausgabe","Fahrzeug","Gerät"};
@@ -154,7 +167,7 @@ public class CloudWorkspaceActivity extends Activity {
                 add(cell,label,4);
                 nav.addView(cell,new LinearLayout.LayoutParams(0,dp(64),1));
                 cell.setContentDescription("Bereich "+item);
-                cell.setOnClickListener(v->{tab=item;detailKind="";selectedCalendarDate="";render();});
+                cell.setOnClickListener(v->{tab=item;detailKind="";vehicleDocumentsOpen=false;selectedCalendarDate="";render();});
             }
             root.addView(nav);
         }
@@ -335,7 +348,7 @@ public class CloudWorkspaceActivity extends Activity {
             members=foundMembers;records=foundRecords;events=foundEvents;
             lastLoadAt=System.currentTimeMillis();
             return true;
-        },ok->render());
+        },ok->{if(vehicleDocumentsOpen)loadVehicleDocuments();else render();});
     }
     @Override protected void onResume(){
         super.onResume();
@@ -616,6 +629,174 @@ public class CloudWorkspaceActivity extends Activity {
     }
 
 
+
+    private void openVehicleDocuments(JSONObject vehicle){
+        selectedVehicleId=vehicle.optString("id","");
+        selectedVehicleTitle=vehicle.optString("title","Fahrzeug");
+        vehicleDocumentsOpen=true;
+        loadVehicleDocuments();
+    }
+    private void loadVehicleDocuments(){
+        if(selectedVehicleId.isEmpty())return;
+        shell("Fahrzeugdokumente");
+        heading("Dokumente werden geladen","Geschützter Speicher für den Fahrzeugschein.");
+        launch(()->new JSONArray(http("/rest/v1/record_documents?select=*&record_id=eq."
+            +selectedVehicleId+"&order=created_at.desc","GET",null,true)),docs->{
+            vehicleDocuments=docs;renderVehicleDocuments();
+        });
+    }
+    private void renderVehicleDocuments(){
+        shell("Fahrzeugschein");
+        add(main,button("← Zurück zur Fahrzeugakte",()->{
+            vehicleDocumentsOpen=false;
+            JSONObject vehicle=recordById(selectedVehicleId);
+            if(vehicle!=null)vehicleDetail(vehicle);
+            else{detailKind="Fahrzeug";render();}
+        }),0);
+        heading(selectedVehicleTitle,"Fahrzeugschein-Fotos sicher hinterlegen.");
+        add(main,goldButton("+ Fahrzeugschein-Foto auswählen",()->{
+            Intent picker=new Intent(Intent.ACTION_OPEN_DOCUMENT);
+            picker.addCategory(Intent.CATEGORY_OPENABLE);
+            picker.setType("image/*");
+            picker.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            startActivityForResult(picker,PICK_VEHICLE_IMAGE);
+        }),20);
+        add(main,text("Du kannst mehrere Fotos speichern, zum Beispiel Vorder- und Rückseite. Wenn du ein neues Bild aufnimmst, kannst du es anschließend aus der Galerie auswählen.",12,false),12);
+        if(vehicleDocuments.length()==0)
+            add(main,text("Noch keine Fahrzeugschein-Fotos gespeichert.",15,false),24);
+        for(int i=0;i<vehicleDocuments.length();i++){
+            JSONObject doc=vehicleDocuments.optJSONObject(i);
+            if(doc==null)continue;
+            String path=doc.optString("storage_path","");
+            if(path.isEmpty())continue;
+            LinearLayout row=card();
+            add(row,text("📄 "+doc.optString("file_name","Fahrzeugschein"),16,true),0);
+            add(row,text("Hochgeladen am "+doc.optString("created_at","").substring(0,
+                Math.min(10,doc.optString("created_at","").length())),12,false),8);
+            add(row,button("Foto öffnen",()->showDocumentPhoto(path)),13);
+            add(row,button("Foto entfernen",()->new AlertDialog.Builder(this)
+                .setTitle("Fahrzeugschein-Foto entfernen?")
+                .setMessage("Dieses Bild wird dauerhaft aus dem Team-Speicher gelöscht.")
+                .setNegativeButton("Abbrechen",null)
+                .setPositiveButton("Entfernen",(d,w)->removeVehicleDocument(doc)).show()),9);
+            add(main,row,13);
+        }
+        add(main,button("⟳ Fotos aktualisieren",this::loadVehicleDocuments),15);
+    }
+    private byte[] imageFromUri(Uri uri) throws Exception{
+        BitmapFactory.Options opts=new BitmapFactory.Options();
+        opts.inJustDecodeBounds=true;
+        try(InputStream probe=getContentResolver().openInputStream(uri)){
+            if(probe==null)throw new IOException("Foto kann nicht geöffnet werden");
+            BitmapFactory.decodeStream(probe,null,opts);
+        }
+        if(opts.outWidth<=0||opts.outHeight<=0)throw new IOException("Kein gültiges Bild");
+        int sample=1;
+        while((opts.outWidth/sample)>1800||(opts.outHeight/sample)>1800)sample*=2;
+        BitmapFactory.Options actual=new BitmapFactory.Options();
+        actual.inSampleSize=sample;
+        Bitmap bitmap;
+        try(InputStream stream=getContentResolver().openInputStream(uri)){
+            if(stream==null)throw new IOException("Foto kann nicht geöffnet werden");
+            bitmap=BitmapFactory.decodeStream(stream,null,actual);
+        }
+        if(bitmap==null)throw new IOException("Bildformat wird nicht unterstützt.");
+        try(ByteArrayOutputStream out=new ByteArrayOutputStream()){
+            bitmap.compress(Bitmap.CompressFormat.JPEG,85,out);
+            byte[] data=out.toByteArray();
+            if(data.length>8*1024*1024)throw new IOException("Bild ist zu groß. Bitte kleineres Foto wählen.");
+            return data;
+        }finally {bitmap.recycle();}
+    }
+    @Override protected void onActivityResult(int requestCode,int resultCode,Intent data){
+        super.onActivityResult(requestCode,resultCode,data);
+        if(requestCode==PICK_VEHICLE_IMAGE && resultCode==RESULT_OK &&
+            data!=null && data.getData()!=null && !selectedVehicleId.isEmpty()){
+            Uri uri=data.getData();
+            String recordId=selectedVehicleId;
+            launch(()->{
+                byte[] photo=imageFromUri(uri);
+                String filename="fahrzeugschein-"+UUID.randomUUID().toString()+".jpg";
+                String path=recordId+"/"+filename;
+                binaryRequest("/storage/v1/object/"+DOC_BUCKET+"/"+path,"POST",photo,"image/jpeg",true);
+                JSONObject meta=new JSONObject();
+                meta.put("record_id",recordId);
+                meta.put("storage_path",path);
+                meta.put("file_name",filename);
+                meta.put("mime_type","image/jpeg");
+                meta.put("label","Fahrzeugschein");
+                meta.put("uploaded_by",userId);
+                try {http("/rest/v1/record_documents","POST",meta,true);}
+                catch(Exception registerError){
+                    try {binaryRequest("/storage/v1/object/"+DOC_BUCKET+"/"+path,"DELETE",null,null,true);}
+                    catch(Exception ignored){}
+                    throw registerError;
+                }
+                return true;
+            },saved->loadVehicleDocuments());
+        }
+    }
+    private byte[] binaryRequest(String path,String method,byte[] upload,String mime,boolean retry)throws Exception{
+        URL url=new URL(base+path);
+        if(!"https".equalsIgnoreCase(url.getProtocol()))throw new IOException("Nur HTTPS erlaubt.");
+        HttpURLConnection connection=(HttpURLConnection)url.openConnection();
+        connection.setConnectTimeout(16000);connection.setReadTimeout(35000);
+        connection.setRequestMethod(method);
+        connection.setRequestProperty("apikey",pub);
+        connection.setRequestProperty("Authorization","Bearer "+access);
+        connection.setRequestProperty("Accept","application/json");
+        if(upload!=null){
+            connection.setDoOutput(true);
+            connection.setRequestProperty("Content-Type",mime);
+            connection.setFixedLengthStreamingMode(upload.length);
+            try(OutputStream os=connection.getOutputStream()){os.write(upload);}
+        }
+        int status=connection.getResponseCode();
+        InputStream in=status>=400?connection.getErrorStream():connection.getInputStream();
+        ByteArrayOutputStream bytes=new ByteArrayOutputStream();
+        if(in!=null){try(InputStream stream=in){
+            byte[] buf=new byte[16384];int n;
+            while((n=stream.read(buf))!=-1)bytes.write(buf,0,n);
+        }}
+        connection.disconnect();
+        byte[] body=bytes.toByteArray();
+        if(status==401 && retry && !refresh.isEmpty()){
+            JSONObject next=new JSONObject();
+            next.put("refresh_token",refresh);
+            JSONObject tokens=new JSONObject(http("/auth/v1/token?grant_type=refresh_token","POST",next,false));
+            saveTokens(tokens);
+            return binaryRequest(path,method,upload,mime,false);
+        }
+        if(status>=400)throw new IOException("Dokumentenserver "+status+": "+
+            new String(body,StandardCharsets.UTF_8).substring(0,Math.min(175,body.length)));
+        return body;
+    }
+    private void showDocumentPhoto(String path){
+        launch(()->binaryRequest("/storage/v1/object/authenticated/"+DOC_BUCKET+"/"+path,
+            "GET",null,null,true),data->{
+            Bitmap bmp=BitmapFactory.decodeByteArray(data,0,data.length);
+            if(bmp==null){message("Bilddatei kann nicht angezeigt werden.");return;}
+            ImageView photo=new ImageView(this);
+            photo.setImageBitmap(bmp);
+            photo.setAdjustViewBounds(true);
+            photo.setScaleType(ImageView.ScaleType.FIT_CENTER);
+            photo.setPadding(dp(12),dp(12),dp(12),dp(12));
+            ScrollView sc=new ScrollView(this);sc.addView(photo);
+            new AlertDialog.Builder(this).setTitle("Fahrzeugschein")
+                .setView(sc).setPositiveButton("Schließen",null).show();
+        });
+    }
+    private void removeVehicleDocument(JSONObject doc){
+        String path=doc.optString("storage_path","");
+        String id=doc.optString("id","");
+        if(path.isEmpty()||id.isEmpty())return;
+        launch(()->{
+            binaryRequest("/storage/v1/object/"+DOC_BUCKET+"/"+path,"DELETE",null,null,true);
+            http("/rest/v1/record_documents?id=eq."+id,"DELETE",null,true);
+            return true;
+        },done->loadVehicleDocuments());
+    }
+
     private String dateOrNull(JSONObject record,String key){
         if(record==null || record.isNull(key))return "";
         return record.optString(key,"");
@@ -647,16 +828,7 @@ public class CloudWorkspaceActivity extends Activity {
         add(info,text("Standort: "+meta.optString("standort","–"),14,false),8);
         if(!vehicle.optString("details","").isEmpty())add(info,text(vehicle.optString("details"),14,false),10);
         add(main,info,15);
-        add(main,goldButton("Fahrzeugschein-Fotos ansehen / hinzufügen",()->{
-            Intent open=new Intent(this,VehicleDocumentsActivity.class);
-            open.putExtra("record_id",vehicle.optString("id"));
-            open.putExtra("vehicle_title",vehicle.optString("title"));
-            open.putExtra("access",access);
-            open.putExtra("refresh",refresh);
-            open.putExtra("base",base);
-            open.putExtra("pub",pub);
-            startActivity(open);
-        }),18);
+        add(main,goldButton("Fahrzeugschein-Fotos ansehen / hinzufügen",()->openVehicleDocuments(vehicle)),18);
         add(main,button("Fahrzeug bearbeiten",()->editor(vehicle)),12);
         add(main,text("Fahrzeugscheinfotos werden privat im Firmenkonto gespeichert. Zugang nur für freigeschaltete Teammitglieder.",12,false),16);
     }
