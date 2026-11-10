@@ -21,6 +21,8 @@ struct WorkRecord: Codable, Identifiable, Hashable {
     var paid_cents: Int64
     var due_date: String?
     var assigned_to: UUID?
+    var assigned_both: Bool?
+    var linked_order_id: UUID?
     var created_by: UUID
     var updated_by: UUID
     var created_at: String
@@ -56,21 +58,27 @@ struct EditableRecord {
     var customer = ""
     var address = ""
     var phone = ""
-    var status = "Offen"
+    var status = "Geplant"
     var amount = "0"
     var paid = "0"
     var dueDate = ""
     var assignee = ""
+    var linkedOrder = ""
 
     init(kind: String = "Auftrag", original: WorkRecord? = nil) {
         self.kind = original?.kind ?? kind
+        if original == nil {
+            status = (kind == "Auftrag" || kind == "Termin" || kind == "Aufgabe") ? "Geplant" :
+                     (kind == "Rechnung" || kind == "Angebot") ? "Offen" : "Erfasst"
+        }
         if let r = original {
             title = r.title; details = r.details; customer = r.customer
             address = r.address; phone = r.phone; status = r.status
             amount = String(format: "%.2f", r.amount)
             paid = String(format: "%.2f", r.paid)
             dueDate = r.due_date ?? ""
-            assignee = r.assigned_to?.uuidString.lowercased() ?? ""
+            assignee = r.assigned_both == true ? "__BOTH__" : (r.assigned_to?.uuidString.lowercased() ?? "")
+            linkedOrder = r.linked_order_id?.uuidString.lowercased() ?? ""
         }
     }
 
@@ -86,12 +94,16 @@ struct EditableRecord {
             "amount_cents": cents(amount), "paid_cents": cents(paid)
         ]
         result["due_date"] = dueDate.isEmpty ? NSNull() : dueDate
-        result["assigned_to"] = assignee.isEmpty ? NSNull() : assignee
+        result["assigned_both"] = assignee == "__BOTH__"
+        result["assigned_to"] = assignee.isEmpty || assignee == "__BOTH__" ? NSNull() : assignee
+        if kind == "Rechnung" || kind == "Einnahme" {
+            result["linked_order_id"] = linkedOrder.isEmpty ? NSNull() : linkedOrder
+        }
         return result
     }
 }
 
-let recordKinds = ["Auftrag", "Aufgabe", "Termin", "Kunde", "Angebot", "Rechnung", "Einnahme", "Fahrzeug", "Gerät"]
+let recordKinds = ["Auftrag", "Aufgabe", "Termin", "Kunde", "Angebot", "Rechnung", "Einnahme", "Ausgabe", "Fahrzeug", "Gerät"]
 
 extension Int64 {
     var euros: String {
