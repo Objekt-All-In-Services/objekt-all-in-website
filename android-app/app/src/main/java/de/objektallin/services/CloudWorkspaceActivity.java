@@ -1042,12 +1042,23 @@ public class CloudWorkspaceActivity extends Activity {
         final String[] fAssignIds=assignIds,fLinkIds=linkIds;
         ScrollView scroll=new ScrollView(this);
         scroll.setFillViewport(false);scroll.addView(layout);
-        AlertDialog dialog=new AlertDialog.Builder(this)
+        AlertDialog.Builder builder=new AlertDialog.Builder(this)
             .setTitle(current==null?"Neuer Eintrag: "+category:"Eintrag bearbeiten")
             .setView(scroll)
             .setNegativeButton("Abbrechen",null)
-            .setPositiveButton("Speichern",null)
-            .create();
+            .setPositiveButton("Speichern",null);
+        if(current!=null && isCurrentAdmin()){
+            builder.setNeutralButton("Löschen",(ignored,which)->
+                new AlertDialog.Builder(this)
+                    .setTitle("Eintrag wirklich löschen?")
+                    .setMessage("Dieser Eintrag wird dauerhaft entfernt. Die Löschung wird im Änderungsprotokoll erfasst.")
+                    .setNegativeButton("Abbrechen",null)
+                    .setPositiveButton("Löschen",(confirm,w)->launch(()->{
+                        http("/rest/v1/records?id=eq."+current.optString("id"),"DELETE",null,true);
+                        return true;
+                    },deleted->load())).show());
+        }
+        AlertDialog dialog=builder.create();
         dialog.setOnShowListener(unused->dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{
             String newTitle=title.getText().toString().trim();
             if(newTitle.isEmpty()){title.setError("Bezeichnung eingeben");return;}
