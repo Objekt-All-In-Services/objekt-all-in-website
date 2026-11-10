@@ -47,11 +47,11 @@ struct SessionStore {
 final class Backend {
     private let defaults = UserDefaults.standard
     var projectURL: String {
-        get { defaults.string(forKey: "supabase_url") ?? "" }
+        get { defaults.string(forKey: "supabase_url") ?? "https://pqydohrjsuoxnzdoykgs.supabase.co" }
         set { defaults.set(newValue.trimmingCharacters(in: .whitespacesAndNewlines), forKey: "supabase_url") }
     }
     var publicKey: String {
-        get { defaults.string(forKey: "supabase_public_key") ?? "" }
+        get { defaults.string(forKey: "supabase_public_key") ?? "sb_publishable_r6AKL_SLCbUI8Qw0U0GH8g_AUssip1T" }
         set { defaults.set(newValue.trimmingCharacters(in: .whitespacesAndNewlines), forKey: "supabase_public_key") }
     }
     private(set) var session: AuthSession? = SessionStore.read()
