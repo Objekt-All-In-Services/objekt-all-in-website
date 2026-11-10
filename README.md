@@ -4,7 +4,7 @@ Eigenständiges Projekt für die GbR, mit getrennter Anmeldung für **Silvan** u
 
 | Bereich | Status |
 |---|---|
-| Android | Bisherige lokale App vorhanden; neuer Cloud-Arbeitsraum ist als native Android-Activity implementiert. Eine neue APK muss erstellt und getestet werden. |
+| Android | Die bisherige lokale App bleibt unverändert; die neue Team-App besitzt eine eigene App-Kennung und einen nativen Cloud-Arbeitsraum. Eine neue APK wird gebaut. |
 | iOS | Native SwiftUI-App mit Login, Übersicht, Aufträgen, Aufgaben, Kunden, Terminen, Finanzübersichten und Audit-Ansicht. Quellcode vorhanden; noch kein signierter iPhone-Build. |
 | Synchronisation | Supabase SQL-Datenbank und Zugriffsschutz implementiert; **noch nicht eingerichtet oder produktiv verbunden**. |
 | Änderungsprotokoll | PostgreSQL-Trigger protokolliert Login-Benutzer, Zeit, Vorher-/Nachher-Daten. App zeigt zuletzt geänderte Einträge. |
