@@ -615,70 +615,280 @@ public class CloudWorkspaceActivity extends Activity {
         calendar.show();
     }
 
+
+    private String dateOrNull(JSONObject record,String key){
+        if(record==null || record.isNull(key))return "";
+        return record.optString(key,"");
+    }
+    private String metadataValue(JSONObject record,String key){
+        if(record==null)return "";
+        JSONObject m=record.optJSONObject("metadata");
+        return m==null?"":m.optString(key,"");
+    }
+    private boolean isCurrentAdmin(){
+        for(int i=0;i<members.length();i++){
+            JSONObject m=members.optJSONObject(i);
+            if(m!=null&&userId.equalsIgnoreCase(m.optString("user_id"))
+                &&m.optString("role").equals("admin"))return true;
+        }
+        return false;
+    }
+    private void vehicleDetail(JSONObject vehicle){
+        shell("Fahrzeugakte");
+        add(main,button("← Zurück zum Fuhrpark",()->{detailKind="Fahrzeug";render();}),0);
+        heading(vehicle.optString("title","Fahrzeug"),"Fahrzeugdaten und geschützte Dokumente.");
+        LinearLayout info=card();
+        JSONObject meta=vehicle.optJSONObject("metadata");
+        if(meta==null)meta=new JSONObject();
+        add(info,text("Kennzeichen: "+meta.optString("kennzeichen","–"),16,true),0);
+        add(info,text("Marke: "+meta.optString("marke","–")+"  ·  Modell: "+meta.optString("modell","–"),14,false),10);
+        add(info,text("HU/TÜV: "+(meta.optString("hu_date","").isEmpty()?"Nicht eingetragen":displayDate(meta.optString("hu_date"))),14,false),10);
+        add(info,text("Fahrgestellnummer: "+meta.optString("vin","–"),14,false),8);
+        add(info,text("Standort: "+meta.optString("standort","–"),14,false),8);
+        if(!vehicle.optString("details","").isEmpty())add(info,text(vehicle.optString("details"),14,false),10);
+        add(main,info,15);
+        add(main,goldButton("Fahrzeugschein-Fotos ansehen / hinzufügen",()->{
+            Intent open=new Intent(this,VehicleDocumentsActivity.class);
+            open.putExtra("record_id",vehicle.optString("id"));
+            open.putExtra("vehicle_title",vehicle.optString("title"));
+            open.putExtra("access",access);
+            open.putExtra("refresh",refresh);
+            open.putExtra("base",base);
+            open.putExtra("pub",pub);
+            startActivity(open);
+        }),18);
+        add(main,button("Fahrzeug bearbeiten",()->editor(vehicle)),12);
+        add(main,text("Fahrzeugscheinfotos werden privat im Firmenkonto gespeichert. Zugang nur für freigeschaltete Teammitglieder.",12,false),16);
+    }
+    private EditText optionalMultiline(LinearLayout layout,String title,String value,int minLines){
+        EditText box=input(layout,title,value,false);
+        box.setSingleLine(false);
+        box.setMinLines(minLines);
+        return box;
+    }
     private void editor(JSONObject current){
-        LinearLayout layout=vertical();layout.setPadding(dp(18),dp(5),dp(18),dp(5));
-        EditText title=input(layout,"Titel *",current==null?"":current.optString("title"),false);
-        EditText customer=input(layout,"Kunde",current==null?"":current.optString("customer"),false);
-        EditText address=input(layout,"Adresse",current==null?"":current.optString("address"),false);
-        EditText phone=input(layout,"Telefon",current==null?"":current.optString("phone"),false);
-        EditText details=input(layout,"Beschreibung",current==null?"":current.optString("details"),false);details.setSingleLine(false);details.setMinLines(3);
-        String existingDate=current==null || current.isNull("due_date") ? "" : current.optString("due_date","");
-        EditText due=input(layout,"Termin · Kalender öffnen (TT.MM.JJJJ)",displayDate(existingDate),false);
-        due.setHint("📅 Hier tippen, um Termin auszuwählen");
-        due.setFocusable(false);
-        due.setClickable(true);
-        due.setOnClickListener(v->chooseDate(due));
-        TextView removeDate=text("Termin entfernen",12,false);
-        removeDate.setTextColor(Color.rgb(125,87,35));
-        removeDate.setPadding(dp(4),dp(12),dp(4),dp(5));
-        removeDate.setOnClickListener(v->due.setText(""));
-        add(layout,removeDate,0);
-        EditText amount=input(layout,"Betrag in EUR",current==null?"0":String.format(java.util.Locale.US,"%.2f",current.optLong("amount_cents")/100.0),false);
-        EditText paid=input(layout,"Bezahlt in EUR",current==null?"0":String.format(java.util.Locale.US,"%.2f",current.optLong("paid_cents")/100.0),false);
-        add(layout,text("Status",12,true),12);
-        Spinner statuses=new Spinner(this);statuses.setAdapter(new ArrayAdapter<>(this,android.R.layout.simple_spinner_dropdown_item,STATUSES));
-        String chosen=current==null?"Offen":current.optString("status");for(int i=0;i<STATUSES.length;i++)if(STATUSES[i].equals(chosen))statuses.setSelection(i);add(layout,statuses,3);
-        add(layout,text("Zuständig",12,true),12);
-        String[] memberNames=new String[members.length()+1],ids=new String[members.length()+1];memberNames[0]="Nicht zugewiesen";ids[0]="";
-        for(int i=0;i<members.length();i++){JSONObject m=members.optJSONObject(i);memberNames[i+1]=m.optString("display_name");ids[i+1]=m.optString("user_id");}
-        Spinner assigned=new Spinner(this);assigned.setAdapter(new ArrayAdapter<>(this,android.R.layout.simple_spinner_dropdown_item,memberNames));
-        String selected=current==null?"":current.optString("assigned_to","");for(int i=0;i<ids.length;i++)if(ids[i].equalsIgnoreCase(selected))assigned.setSelection(i);
-        add(layout,assigned,4);
-        ScrollView scroll=new ScrollView(this);scroll.addView(layout);
-        AlertDialog dialog=new AlertDialog.Builder(this).setTitle(current==null?"Neuer Eintrag":"Eintrag bearbeiten").setView(scroll)
-            .setNegativeButton("Abbrechen",null).setPositiveButton("Speichern",null).create();
-        dialog.setOnShowListener(unused->dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{
-            String ttl=title.getText().toString().trim();if(ttl.isEmpty()){title.setError("Titel erforderlich");return;}
-            String visibleDate=due.getText().toString().trim();
-            String dt="";
-            if(!visibleDate.isEmpty()){
-                try { dt=LocalDate.parse(visibleDate,DATE_DDMMYYYY).toString(); }
-                catch(Exception invalidDate){
-                    message("Ungültiger Termin. Bitte das Datum über den Kalender auswählen.");
-                    return;
+        final String category=current==null?kind:current.optString("kind",kind);
+        final boolean job=category.equals("Auftrag");
+        final boolean appointment=category.equals("Termin");
+        final boolean task=category.equals("Aufgabe");
+        final boolean person=category.equals("Kunde");
+        final boolean vehicle=category.equals("Fahrzeug");
+        final boolean equipment=category.equals("Gerät");
+        final boolean invoice=category.equals("Rechnung");
+        final boolean offer=category.equals("Angebot");
+        final boolean income=category.equals("Einnahme");
+        final boolean expense=category.equals("Ausgabe");
+        final boolean moneyKind=job||invoice||offer||income||expense;
+        final boolean assignable=job||appointment||task;
+        LinearLayout layout=vertical();
+        layout.setPadding(dp(18),dp(6),dp(18),dp(9));
+        String titleLabel=person?"Kundenname *":vehicle?"Fahrzeugbezeichnung *":equipment?"Gerät / Maschine *":
+            task?"Aufgabe *":income?"Einnahme *":expense?"Ausgabe *":category+" *";
+        EditText title=input(layout,titleLabel,current==null?"":current.optString("title",""),false);
+        EditText customer=null;
+        if(job||appointment||invoice||offer){
+            customer=input(layout,"Kunde / Auftraggeber",current==null?"":current.optString("customer",""),false);
+        }
+        EditText address=null;
+        EditText phone=null;
+        if(job||appointment||person||invoice||offer){
+            address=input(layout,"Anschrift / Einsatzort",current==null?"":current.optString("address",""),false);
+            phone=input(layout,"Telefon",current==null?"":current.optString("phone",""),false);
+            phone.setInputType(InputType.TYPE_CLASS_PHONE);
+        }
+        EditText details=optionalMultiline(layout,"Beschreibung / Notizen",current==null?"":current.optString("details",""),3);
+        EditText checklist=null;
+        if(task) checklist=optionalMultiline(layout,"Checkliste (eine Aufgabe pro Zeile)",metadataValue(current,"checklist"),3);
+        EditText make=null,model=null,plate=null,vin=null,location=null,hu=null,manufacturer=null,serial=null,maintenance=null;
+        if(vehicle){
+            make=input(layout,"Marke",metadataValue(current,"marke"),false);
+            model=input(layout,"Modell",metadataValue(current,"modell"),false);
+            plate=input(layout,"Kennzeichen",metadataValue(current,"kennzeichen"),false);
+            vin=input(layout,"Fahrgestellnummer (FIN)",metadataValue(current,"vin"),false);
+            location=input(layout,"Standort",metadataValue(current,"standort"),false);
+            hu=input(layout,"Nächste HU / TÜV · Kalender",displayDate(metadataValue(current,"hu_date")),false);
+            hu.setFocusable(false);hu.setClickable(true);
+            EditText target=hu;
+            hu.setOnClickListener(v->chooseDate(target));
+        }
+        if(equipment){
+            manufacturer=input(layout,"Hersteller",metadataValue(current,"hersteller"),false);
+            serial=input(layout,"Seriennummer",metadataValue(current,"seriennummer"),false);
+            location=input(layout,"Standort",metadataValue(current,"standort"),false);
+            maintenance=input(layout,"Nächste Wartung · Kalender",displayDate(metadataValue(current,"wartung_date")),false);
+            maintenance.setFocusable(false);maintenance.setClickable(true);
+            EditText target=maintenance;maintenance.setOnClickListener(v->chooseDate(target));
+        }
+        EditText due=null;
+        if(job||appointment||task||invoice||offer||income||expense){
+            due=input(layout,(job||appointment||task?"Termin":"Datum")+" · Kalender (TT.MM.JJJJ)",displayDate(dateOrNull(current,"due_date")),false);
+            due.setFocusable(false);due.setClickable(true);
+            EditText target=due;
+            due.setOnClickListener(v->chooseDate(target));
+            add(layout,button("Datum entfernen",()->target.setText("")),7);
+        }
+        EditText amount=null,paid=null;
+        if(moneyKind){
+            amount=input(layout,"Betrag in Euro",current==null?"0,00":String.format(Locale.GERMANY,"%.2f",current.optLong("amount_cents")/100.0),false);
+            amount.setInputType(InputType.TYPE_CLASS_NUMBER|InputType.TYPE_NUMBER_FLAG_DECIMAL|InputType.TYPE_NUMBER_FLAG_SIGNED);
+            if(job||invoice){
+                paid=input(layout,"Bereits bezahlt in Euro",current==null?"0,00":String.format(Locale.GERMANY,"%.2f",current.optLong("paid_cents")/100.0),false);
+                paid.setInputType(InputType.TYPE_CLASS_NUMBER|InputType.TYPE_NUMBER_FLAG_DECIMAL|InputType.TYPE_NUMBER_FLAG_SIGNED);
+            }
+        }
+        Spinner statuses=null;
+        if(job||task||appointment||invoice||offer){
+            add(layout,text("Status",13,true),16);
+            String[] options=job?new String[]{"Geplant","Abgeschlossen","Bezahlt"}:
+                task?new String[]{"Geplant","Erledigt"}:
+                appointment?new String[]{"Geplant","Abgeschlossen"}:
+                invoice?new String[]{"Offen","Bezahlt"}:
+                new String[]{"Offen","Abgeschlossen"};
+            statuses=new Spinner(this);
+            statuses.setAdapter(new ArrayAdapter<String>(this,android.R.layout.simple_spinner_dropdown_item,options));
+            String old=current==null?"":current.optString("status","");
+            if(job){
+                if(old.equals("Erledigt"))old="Abgeschlossen";
+                if(old.equals("Offen")||old.equals("In Arbeit")||old.equals("Storniert"))old="Geplant";
+                if(old.isEmpty())old="Geplant";
+            }else if(old.isEmpty()){old="Geplant";}
+            for(int i=0;i<options.length;i++)if(options[i].equals(old))statuses.setSelection(i);
+            add(layout,statuses,5);
+            if(job)add(layout,text("Geplant: 0 € offen. Abgeschlossen: Restbetrag offen. Bezahlt: vollständig bezahlt.",12,false),8);
+        }
+        Spinner assigned=null;
+        String[] assignIds=null;
+        if(assignable){
+            add(layout,text("Zuständig",13,true),16);
+            int n=members.length();
+            String[] names=new String[n+2];
+            assignIds=new String[n+2];
+            names[0]="Nicht zugewiesen";assignIds[0]="";
+            for(int i=0;i<n;i++){
+                JSONObject member=members.optJSONObject(i);
+                names[i+1]=member.optString("display_name","Teammitglied");
+                assignIds[i+1]=member.optString("user_id","");
+            }
+            names[n+1]="Beide (Silvan & Lion)";
+            assignIds[n+1]="BOTH";
+            assigned=new Spinner(this);
+            assigned.setAdapter(new ArrayAdapter<String>(this,android.R.layout.simple_spinner_dropdown_item,names));
+            if(current!=null&&current.optBoolean("assigned_both",false))assigned.setSelection(n+1);
+            else{
+                String id=current==null?"":current.optString("assigned_to","");
+                for(int i=0;i<assignIds.length;i++)if(assignIds[i].equalsIgnoreCase(id))assigned.setSelection(i);
+            }
+            add(layout,assigned,6);
+        }
+        Spinner orderLink=null;
+        String[] linkIds=null;
+        if(invoice){
+            add(layout,text("Zugehöriger Auftrag (optional, verhindert doppelte offene Beträge)",12,true),17);
+            int n=countKind("Auftrag");
+            String[] names=new String[n+1];
+            linkIds=new String[n+1];
+            names[0]="Ohne Auftragszuordnung";linkIds[0]="";
+            int x=1;
+            for(int i=0;i<records.length();i++){
+                JSONObject record=records.optJSONObject(i);
+                if(record!=null&&record.optString("kind").equals("Auftrag")){
+                    names[x]=record.optString("title","Auftrag");
+                    linkIds[x]=record.optString("id");x++;
                 }
             }
-            JSONObject payload=new JSONObject();try{
-                payload.put("title",ttl);payload.put("kind",current==null?kind:current.optString("kind",kind));
-                payload.put("customer",customer.getText().toString());payload.put("address",address.getText().toString());
-                payload.put("phone",phone.getText().toString());payload.put("details",details.getText().toString());
-                payload.put("status",statuses.getSelectedItem().toString());
-                payload.put("due_date",dt.isEmpty()?JSONObject.NULL:dt);
-                String uid=ids[assigned.getSelectedItemPosition()];payload.put("assigned_to",uid.isEmpty()?JSONObject.NULL:uid);
-                payload.put("amount_cents",Math.round(Double.parseDouble(amount.getText().toString().replace(",","."))*100));
-                payload.put("paid_cents",Math.round(Double.parseDouble(paid.getText().toString().replace(",","."))*100));
-            }catch(Exception e){message("Bitte gültige Beträge eingeben.");return;}
+            orderLink=new Spinner(this);
+            orderLink.setAdapter(new ArrayAdapter<String>(this,android.R.layout.simple_spinner_dropdown_item,names));
+            String previous=current==null?"":current.optString("linked_order_id","");
+            for(int i=0;i<linkIds.length;i++)if(linkIds[i].equalsIgnoreCase(previous))orderLink.setSelection(i);
+            add(layout,orderLink,5);
+        }
+        final EditText fCustomer=customer,fAddress=address,fPhone=phone,fChecklist=checklist;
+        final EditText fMake=make,fModel=model,fPlate=plate,fVin=vin,fLocation=location,fHu=hu,fManufacturer=manufacturer,
+            fSerial=serial,fMaintenance=maintenance,fDue=due,fAmount=amount,fPaid=paid;
+        final Spinner fStatuses=statuses,fAssigned=assigned,fOrderLink=orderLink;
+        final String[] fAssignIds=assignIds,fLinkIds=linkIds;
+        ScrollView scroll=new ScrollView(this);
+        scroll.setFillViewport(false);scroll.addView(layout);
+        AlertDialog dialog=new AlertDialog.Builder(this)
+            .setTitle(current==null?"Neuer Eintrag: "+category:"Eintrag bearbeiten")
+            .setView(scroll)
+            .setNegativeButton("Abbrechen",null)
+            .setPositiveButton("Speichern",null)
+            .create();
+        dialog.setOnShowListener(unused->dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{
+            String newTitle=title.getText().toString().trim();
+            if(newTitle.isEmpty()){title.setError("Bezeichnung eingeben");return;}
+            String serverDate="";
+            if(fDue!=null&&!fDue.getText().toString().trim().isEmpty()){
+                try {serverDate=LocalDate.parse(fDue.getText().toString().trim(),DATE_DDMMYYYY).toString();}
+                catch(Exception ex){message("Ungültiges Datum, bitte im Kalender wählen.");return;}
+            }
+            JSONObject md=new JSONObject();
+            try{
+                if(task)md.put("checklist",fChecklist.getText().toString());
+                if(vehicle){
+                    md.put("marke",fMake.getText().toString().trim());
+                    md.put("modell",fModel.getText().toString().trim());
+                    md.put("kennzeichen",fPlate.getText().toString().trim());
+                    md.put("vin",fVin.getText().toString().trim());
+                    md.put("standort",fLocation.getText().toString().trim());
+                    String d=fHu.getText().toString().trim();
+                    md.put("hu_date",d.isEmpty()?"":LocalDate.parse(d,DATE_DDMMYYYY).toString());
+                }
+                if(equipment){
+                    md.put("hersteller",fManufacturer.getText().toString().trim());
+                    md.put("seriennummer",fSerial.getText().toString().trim());
+                    md.put("standort",fLocation.getText().toString().trim());
+                    String d=fMaintenance.getText().toString().trim();
+                    md.put("wartung_date",d.isEmpty()?"":LocalDate.parse(d,DATE_DDMMYYYY).toString());
+                }
+            }catch(Exception ex){message("Datum in den Fahrzeug- oder Gerätedaten bitte im Kalender wählen.");return;}
+            JSONObject payload=new JSONObject();
+            try{
+                payload.put("kind",category);
+                payload.put("title",newTitle);
+                payload.put("details",details.getText().toString());
+                payload.put("customer",fCustomer==null?"":fCustomer.getText().toString());
+                payload.put("address",fAddress==null?"":fAddress.getText().toString());
+                payload.put("phone",fPhone==null?"":fPhone.getText().toString());
+                payload.put("due_date",serverDate.isEmpty()?JSONObject.NULL:serverDate);
+                payload.put("metadata",md);
+                payload.put("status",fStatuses==null?"Erfasst":fStatuses.getSelectedItem().toString());
+                long amountCents=moneyToCents(fAmount==null?"0":fAmount.getText().toString());
+                long paidCents=moneyToCents(fPaid==null?"0":fPaid.getText().toString());
+                if(amountCents<0||paidCents<0||paidCents>amountCents){
+                    message("Beträge müssen positiv sein. Der bezahlte Betrag darf nicht höher als die Gesamtsumme sein.");return;
+                }
+                if(job&&"Bezahlt".equals(payload.getString("status")))paidCents=amountCents;
+                payload.put("amount_cents",amountCents);
+                payload.put("paid_cents",paidCents);
+                String assignment=fAssigned==null?"":fAssignIds[fAssigned.getSelectedItemPosition()];
+                payload.put("assigned_both",assignment.equals("BOTH"));
+                payload.put("assigned_to",assignment.isEmpty()||assignment.equals("BOTH")?JSONObject.NULL:assignment);
+                if(invoice){
+                    String linked=fLinkIds[fOrderLink.getSelectedItemPosition()];
+                    payload.put("linked_order_id",linked.isEmpty()?JSONObject.NULL:linked);
+                }
+            }catch(Exception ex){message("Bitte gültige Euro-Beträge eingeben.");return;}
             launch(()->{
-                if(current==null){
-                    http("/rest/v1/records","POST",payload,true);
-                }else{
+                if(current==null)http("/rest/v1/records","POST",payload,true);
+                else{
                     JSONObject rpc=new JSONObject();
-                    rpc.put("p_id",current.getString("id"));rpc.put("p_values",payload);
+                    rpc.put("p_id",current.getString("id"));
+                    rpc.put("p_values",payload);
                     http("/rest/v1/rpc/update_record","POST",rpc,true);
                 }
                 return true;
-            },ok->{dialog.dismiss();load();});
-        }));dialog.show();
+            },saved->{dialog.dismiss();load();});
+        }));
+        dialog.show();
+    }
+    private long moneyToCents(String value){
+        String clean=value.trim().replace(" ","").replace("€","");
+        if(clean.contains(",")&&clean.contains("."))clean=clean.replace(".","");
+        clean=clean.replace(",",".");
+        return new java.math.BigDecimal(clean).movePointRight(2)
+            .setScale(0,java.math.RoundingMode.HALF_UP).longValueExact();
     }
     private void history(){
         shell("Änderungsprotokoll");
