@@ -52,7 +52,7 @@ public class CloudWorkspaceActivity extends Activity {
     @Override public void onCreate(Bundle bundle){
         super.onCreate(bundle);
         pref=getSharedPreferences(PREF,MODE_PRIVATE);
-        base=pref.getString("url","");pub=pref.getString("key","");
+        base=pref.getString("url","https://pqydohrjsuoxnzdoykgs.supabase.co");pub=pref.getString("key","sb_publishable_r6AKL_SLCbUI8Qw0U0GH8g_AUssip1T");
         readTokens();
         if(access.isEmpty())loginScreen();else load();
     }
