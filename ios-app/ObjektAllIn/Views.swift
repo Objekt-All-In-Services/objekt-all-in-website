@@ -239,53 +239,126 @@ struct RecordEditor: View {
     let original: WorkRecord?
     @State private var form: EditableRecord
     @State private var saving = false
+    @State private var hasDate: Bool
+    @State private var chosenDate: Date
+
     init(kind: String = "Auftrag", original: WorkRecord? = nil) {
         self.original = original
-        _form = State(initialValue: EditableRecord(kind: kind, original: original))
+        let seed = EditableRecord(kind: kind, original: original)
+        _form = State(initialValue: seed)
+        _hasDate = State(initialValue: !seed.dueDate.isEmpty)
+        let df = DateFormatter()
+        df.locale = Locale(identifier: "en_US_POSIX")
+        df.dateFormat = "yyyy-MM-dd"
+        _chosenDate = State(initialValue: df.date(from: seed.dueDate) ?? Date())
     }
+
+    private var statusOptions: [String] {
+        switch form.kind {
+        case "Auftrag": return ["Geplant", "Abgeschlossen", "Bezahlt"]
+        case "Aufgabe": return ["Geplant", "Erledigt"]
+        case "Termin": return ["Geplant", "Abgeschlossen"]
+        case "Rechnung": return ["Offen", "Bezahlt"]
+        case "Angebot": return ["Offen", "Abgeschlossen"]
+        default: return []
+        }
+    }
+    private var supportsAssignment: Bool {
+        ["Auftrag", "Aufgabe", "Termin"].contains(form.kind)
+    }
+    private var supportsMoney: Bool {
+        ["Auftrag", "Angebot", "Rechnung", "Einnahme", "Ausgabe"].contains(form.kind)
+    }
+    private var supportsDate: Bool {
+        ["Auftrag", "Aufgabe", "Termin", "Angebot", "Rechnung", "Einnahme", "Ausgabe"].contains(form.kind)
+    }
+
     var body: some View {
         Form {
             Section("Allgemein") {
-                Picker("Bereich", selection: $form.kind) {
-                    ForEach(recordKinds, id: \.self) { Text($0).tag($0) }
+                LabeledContent("Bereich", value: form.kind)
+                TextField(form.kind == "Kunde" ? "Kundenname *" :
+                            form.kind == "Fahrzeug" ? "Fahrzeugbezeichnung *" : "Bezeichnung *", text: $form.title)
+                if ["Auftrag","Termin","Angebot","Rechnung"].contains(form.kind) {
+                    TextField("Kunde / Auftraggeber", text: $form.customer)
                 }
-                TextField("Titel *", text: $form.title)
-                TextField("Kunde", text: $form.customer)
-                Picker("Status", selection: $form.status) {
-                    ForEach(["Offen", "Geplant", "In Arbeit", "Erledigt", "Abgeschlossen", "Bezahlt", "Storniert"], id: \.self) { Text($0).tag($0) }
+                if !statusOptions.isEmpty {
+                    Picker("Status", selection: $form.status) {
+                        ForEach(statusOptions,id: \.self) { Text($0).tag($0) }
+                    }
                 }
-                Picker("Zuständig", selection: $form.assignee) {
-                    Text("Nicht zugewiesen").tag("")
-                    ForEach(store.members.filter(\.active)) { person in
-                        Text(person.display_name).tag(person.user_id.uuidString.lowercased())
+                if supportsAssignment {
+                    Picker("Zuständig", selection: $form.assignee) {
+                        Text("Nicht zugewiesen").tag("")
+                        ForEach(store.members.filter(\.active)) { member in
+                            Text(member.display_name).tag(member.user_id.uuidString.lowercased())
+                        }
+                        Text("Beide (Silvan & Lion)").tag("__BOTH__")
                     }
                 }
             }
-            Section("Einsatz & Kontakt") {
-                TextField("Adresse", text: $form.address)
-                TextField("Telefon", text: $form.phone).keyboardType(.phonePad)
-                TextField("Termin (JJJJ-MM-TT)", text: $form.dueDate)
-                    .keyboardType(.numbersAndPunctuation)
+            if ["Auftrag","Termin","Angebot","Rechnung","Kunde"].contains(form.kind) {
+                Section("Kontakt & Ort") {
+                    TextField("Adresse", text: $form.address)
+                    TextField("Telefon", text: $form.phone).keyboardType(.phonePad)
+                }
             }
-            Section("Details") {
+            if supportsDate {
+                Section("Termin") {
+                    Toggle("Datum festlegen", isOn: $hasDate)
+                    if hasDate {
+                        DatePicker("Datum", selection: $chosenDate, displayedComponents: .date)
+                            .datePickerStyle(.compact).environment(\.locale, Locale(identifier: "de_DE"))
+                    }
+                }
+            }
+            Section("Beschreibung / Notizen") {
                 TextEditor(text: $form.details).frame(minHeight: 110)
             }
-            Section("Finanzen") {
-                TextField("Betrag in €", text: $form.amount).keyboardType(.decimalPad)
-                TextField("Bereits bezahlt in €", text: $form.paid).keyboardType(.decimalPad)
+            if supportsMoney {
+                Section("Beträge") {
+                    TextField("Betrag in Euro", text: $form.amount).keyboardType(.decimalPad)
+                    if ["Auftrag","Rechnung"].contains(form.kind) {
+                        TextField("Bereits bezahlt in Euro", text: $form.paid).keyboardType(.decimalPad)
+                    }
+                }
             }
-            if let error = store.errorMessage { Section { Text(error).foregroundStyle(.red) } }
+            if ["Rechnung","Einnahme"].contains(form.kind) {
+                Section("Zugehöriger Auftrag (optional)") {
+                    Picker("Auftrag", selection: $form.linkedOrder) {
+                        Text("Keine Zuordnung").tag("")
+                        ForEach(store.records.filter { $0.kind == "Auftrag" }) { r in
+                            Text(r.title).tag(r.id.uuidString.lowercased())
+                        }
+                    }
+                    Text("Eine Verknüpfung vermeidet doppelte Summen.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+            }
+            if let error = store.errorMessage {
+                Section { Text(error).foregroundStyle(.red) }
+            }
         }
-        .navigationTitle(original == nil ? "Eintrag erstellen" : "Eintrag bearbeiten")
+        .navigationTitle(original == nil ? "Neuer Eintrag" : "Eintrag bearbeiten")
         .toolbar {
-            ToolbarItem(placement: .cancellationAction) { Button("Abbrechen") { dismiss() } }
+            ToolbarItem(placement: .cancellationAction) {
+                Button("Abbrechen") { dismiss() }
+            }
             ToolbarItem(placement: .confirmationAction) {
                 Button("Speichern") {
                     saving = true
+                    var updated = form
+                    let formatter = DateFormatter()
+                    formatter.locale = Locale(identifier: "en_US_POSIX")
+                    formatter.dateFormat = "yyyy-MM-dd"
+                    updated.dueDate = hasDate ? formatter.string(from: chosenDate) : ""
+                    if updated.kind == "Auftrag" && updated.status == "Bezahlt" {
+                        updated.paid = updated.amount
+                    }
                     Task {
-                        let success = await store.save(form, id: original?.id)
+                        let ok = await store.save(updated, id: original?.id)
                         saving = false
-                        if success { dismiss() }
+                        if ok { dismiss() }
                     }
                 }.disabled(form.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || saving)
             }
