@@ -105,7 +105,6 @@ struct DashboardView: View {
                     MetricCard(name: "Aktive Aufträge", value: "\(store.openJobs())", icon: "shippingbox")
                     MetricCard(name: "Offene Aufgaben", value: "\(store.openTasks())", icon: "checkmark.circle")
                 }
-                MetricCard(name: "Offene Rechnungsbeträge", value: store.invoicesOpen().euros, icon: "eurosign.circle")
                 HStack {
                     Text("Aktuelle Aufträge").font(.title3.bold())
                     Spacer()
@@ -113,7 +112,7 @@ struct DashboardView: View {
                 }
                 ForEach(store.records.filter { $0.kind == "Auftrag" }.prefix(5)) { record in
                     NavigationLink { RecordDetailView(recordID: record.id) } label: {
-                        RecordRow(record: record, assignee: store.memberName(record.assigned_to))
+                        RecordRow(record: record, assignee: store.assignedName(record))
                     }.buttonStyle(.plain)
                 }
                 if store.records.filter({ $0.kind == "Auftrag" }).isEmpty {
@@ -302,7 +301,6 @@ struct FinanceDashboardView: View {
                 Text("Finanzen").font(.largeTitle.bold()).foregroundStyle(navy)
                 Text("Angebote, Rechnungen und Einnahmen im Blick.")
                     .font(.subheadline).foregroundStyle(.secondary)
-                MetricCard(name: "Offene Rechnungsbeträge", value: store.invoicesOpen().euros, icon: "eurosign.circle")
                 NavigationLink {
                     RecordListView(fixedKind: "Angebot")
                 } label: {
@@ -318,11 +316,34 @@ struct FinanceDashboardView: View {
                 } label: {
                     MoreLinkRow(title: "Einnahmen", subtitle: "Erfasste Zahlungseingänge", icon: "chart.line.uptrend.xyaxis")
                 }.buttonStyle(.plain)
+                NavigationLink {
+                    RecordListView(fixedKind: "Ausgabe")
+                } label: {
+                    MoreLinkRow(title: "Ausgaben", subtitle: "Kosten und Ausgaben eintragen", icon: "minus.circle")
+                }.buttonStyle(.plain)
                 Button("Aktualisieren") { Task { await store.reload() } }
                     .frame(maxWidth: .infinity).buttonStyle(.bordered)
             }.padding()
         }.background(Color(.systemGroupedBackground))
             .navigationTitle("Finanzen")
+            .refreshable { await store.reload() }
+    }
+}
+struct FinanceSummaryView: View {
+    @EnvironmentObject private var store: Workspace
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 15) {
+                Text("Finanzübersicht").font(.largeTitle.bold()).foregroundStyle(navy)
+                MetricCard(name: "Gesamteinnahmen", value: store.totalIncome().euros, icon: "arrow.down.left.circle")
+                MetricCard(name: "Gesamtausgaben", value: store.totalExpenses().euros, icon: "arrow.up.right.circle")
+                MetricCard(name: "Offene Forderungen", value: store.invoicesOpen().euros, icon: "doc.text")
+                MetricCard(name: "Überschuss", value: store.surplus().euros, icon: "chart.bar")
+                Text("Geplante Aufträge zählen nicht als offene Forderung. Abgeschlossene Aufträge werden mit dem unbezahlten Betrag berücksichtigt. Bezahlt = 0 € offen. Zahlungen nicht zusätzlich als unabhängige Einnahme doppelt erfassen.")
+                    .font(.footnote).foregroundStyle(.secondary)
+            }.padding()
+        }.background(Color(.systemGroupedBackground))
+            .navigationTitle("Finanzübersicht")
             .refreshable { await store.reload() }
     }
 }
@@ -362,6 +383,9 @@ struct MoreTeamView: View {
                 }
                 NavigationLink { RecordListView(fixedKind: "Gerät") } label: {
                     MoreLinkRow(title: "Geräte & Maschinen", subtitle: "Maschinenübersicht", icon: "wrench.and.screwdriver")
+                }
+                NavigationLink { FinanceSummaryView() } label: {
+                    MoreLinkRow(title: "Finanzübersicht", subtitle: "Einnahmen, Ausgaben und offene Forderungen", icon: "chart.bar.fill")
                 }
                 NavigationLink { ActivityView() } label: {
                     MoreLinkRow(title: "Änderungsprotokoll", subtitle: "Wer hat was geändert?", icon: "clock.arrow.circlepath")
