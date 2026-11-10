@@ -244,8 +244,14 @@ public class CloudWorkspaceActivity extends Activity {
                 payload.put("paid_cents",Math.round(Double.parseDouble(paid.getText().toString().replace(",","."))*100));
             }catch(Exception e){message("Bitte gültige Beträge eingeben.");return;}
             launch(()->{
-                String p=current==null?"/rest/v1/records":"/rest/v1/records?id=eq."+current.optString("id");
-                http(p,current==null?"POST":"PATCH",payload,true);return true;
+                if(current==null){
+                    http("/rest/v1/records","POST",payload,true);
+                }else{
+                    JSONObject rpc=new JSONObject();
+                    rpc.put("p_id",current.getString("id"));rpc.put("p_values",payload);
+                    http("/rest/v1/rpc/update_record","POST",rpc,true);
+                }
+                return true;
             },ok->{dialog.dismiss();load();});
         }));dialog.show();
     }

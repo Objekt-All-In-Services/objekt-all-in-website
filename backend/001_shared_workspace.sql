@@ -151,3 +151,30 @@ using ((select private.is_member()));
 -- KEINE Schreibpolicies fuer audit_events. Der SECURITY-DEFINER-Trigger schreibt manipulationsgeschuetzt.
 
 comment on table public.audit_events is 'Unveraenderliche Protokolle: wer wann welchen Datensatz erstellte, veraenderte oder loeschte';
+
+-- Native Android HTTP-Verbindungen unterstuetzen PATCH nicht zuverlaessig.
+-- Daher gibt es eine explizite POST-RPC-Aktualisierung; SECURITY INVOKER respektiert die RLS-Policies.
+create or replace function public.update_record(p_id uuid, p_values jsonb)
+returns setof public.records
+language plpgsql security invoker set search_path = ''
+as $$
+begin
+  return query
+    update public.records as r set
+      kind = coalesce(p_values->>'kind', r.kind),
+      title = coalesce(p_values->>'title', r.title),
+      details = coalesce(p_values->>'details', r.details),
+      customer = coalesce(p_values->>'customer', r.customer),
+      address = coalesce(p_values->>'address', r.address),
+      phone = coalesce(p_values->>'phone', r.phone),
+      status = coalesce(p_values->>'status', r.status),
+      amount_cents = coalesce((p_values->>'amount_cents')::bigint, r.amount_cents),
+      paid_cents = coalesce((p_values->>'paid_cents')::bigint, r.paid_cents),
+      due_date = case when p_values ? 'due_date' then nullif(p_values->>'due_date','')::date else r.due_date end,
+      assigned_to = case when p_values ? 'assigned_to' then nullif(p_values->>'assigned_to','')::uuid else r.assigned_to end
+    where r.id = p_id
+    returning r.*;
+end;
+$$;
+revoke all on function public.update_record(uuid,jsonb) from public, anon;
+grant execute on function public.update_record(uuid,jsonb) to authenticated;

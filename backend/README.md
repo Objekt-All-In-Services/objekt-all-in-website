@@ -24,3 +24,5 @@ Die native iPhone-App und die optionale Android-Cloud-Ansicht verwenden dieselbe
 ## Abgleich
 
 Die App synchronisiert nur bei Netzverbindung. Ohne Backend und Einladungen ist **keine gemeinsame Nutzung aktiv**. Die native iOS-App ist ein Xcode-Projekt, keine installierbare iPhone-Datei. TestFlight benötigt Apple Developer Program und Signierung.
+
+Die Android-App verwendet `public.update_record` als POST-RPC, weil `HttpURLConnection` PATCH nicht zuverlässig unterstützt. Diese Funktion arbeitet mit den Rechten des angemeldeten Benutzers und respektiert RLS.
