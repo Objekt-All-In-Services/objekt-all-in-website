@@ -2,6 +2,13 @@ package de.objektallin.services;
 
 import android.app.Activity;
 import android.app.AlertDialog;
+import android.app.DatePickerDialog;
+import android.content.DialogInterface;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
+import java.time.format.ResolverStyle;
+import java.util.Locale;
+import java.util.Calendar;
 import android.os.Bundle;
 import android.content.Intent;
 import android.content.SharedPreferences;
@@ -405,7 +412,7 @@ public class CloudWorkspaceActivity extends Activity {
             String customer=e.optString("customer","");
             String status=e.optString("status","Offen");
             String due=e.optString("due_date","");
-            String info=(customer.isEmpty()?"":customer+" · ")+status+(due.isEmpty()||due.equals("null")?"":" · "+due);
+            String info=(customer.isEmpty()?"":customer+" · ")+status+(due.isEmpty()||due.equals("null")?"":" · "+displayDate(due));
             TextView line=text(info,13,false);line.setTextColor(MUTED);add(row,line,7);
             TextView owner=text("Zuständig: "+memberName(e.optString("assigned_to",""))+"  |  Bearbeitet: "+memberName(e.optString("updated_by","")),12,false);
             owner.setTextColor(MUTED);add(row,owner,8);
@@ -450,6 +457,36 @@ public class CloudWorkspaceActivity extends Activity {
             .setNegativeButton("Abbrechen",null).show()),15);
     }
     
+    private static final DateTimeFormatter DATE_DDMMYYYY =
+        DateTimeFormatter.ofPattern("dd.MM.uuuu", Locale.GERMANY)
+            .withResolverStyle(ResolverStyle.STRICT);
+
+    private String displayDate(String iso) {
+        if(iso==null || iso.trim().isEmpty() || "null".equalsIgnoreCase(iso))return "";
+        try { return LocalDate.parse(iso).format(DATE_DDMMYYYY); }
+        catch(Exception badDate){ return ""; }
+    }
+
+    private void chooseDate(EditText field){
+        LocalDate initial=LocalDate.now();
+        String selected=field.getText().toString().trim();
+        if(!selected.isEmpty()){
+            try { initial=LocalDate.parse(selected,DATE_DDMMYYYY); }
+            catch(Exception ignored){ /* Startet sonst beim heutigen Datum. */ }
+        }
+        DatePickerDialog calendar=new DatePickerDialog(this, null,
+            initial.getYear(),initial.getMonthValue()-1,initial.getDayOfMonth());
+        calendar.setTitle("Termin auswählen");
+        calendar.getDatePicker().setFirstDayOfWeek(Calendar.MONDAY);
+        calendar.setButton(DialogInterface.BUTTON_POSITIVE,"Speichern",(dialog,which)->{
+            android.widget.DatePicker picker=calendar.getDatePicker();
+            field.setText(String.format(Locale.GERMANY,"%02d.%02d.%04d",
+                picker.getDayOfMonth(),picker.getMonth()+1,picker.getYear()));
+        });
+        calendar.setButton(DialogInterface.BUTTON_NEGATIVE,"Abbrechen",(dialog,which)->{});
+        calendar.show();
+    }
+
     private void editor(JSONObject current){
         LinearLayout layout=vertical();layout.setPadding(dp(18),dp(5),dp(18),dp(5));
         EditText title=input(layout,"Titel *",current==null?"":current.optString("title"),false);
@@ -457,7 +494,17 @@ public class CloudWorkspaceActivity extends Activity {
         EditText address=input(layout,"Adresse",current==null?"":current.optString("address"),false);
         EditText phone=input(layout,"Telefon",current==null?"":current.optString("phone"),false);
         EditText details=input(layout,"Beschreibung",current==null?"":current.optString("details"),false);details.setSingleLine(false);details.setMinLines(3);
-        EditText due=input(layout,"Termin (JJJJ-MM-TT)",current==null?"":current.optString("due_date",""),false);
+        String existingDate=current==null || current.isNull("due_date") ? "" : current.optString("due_date","");
+        EditText due=input(layout,"Termin · Kalender öffnen (TT.MM.JJJJ)",displayDate(existingDate),false);
+        due.setHint("📅 Hier tippen, um Termin auszuwählen");
+        due.setFocusable(false);
+        due.setClickable(true);
+        due.setOnClickListener(v->chooseDate(due));
+        TextView removeDate=text("Termin entfernen",12,false);
+        removeDate.setTextColor(Color.rgb(125,87,35));
+        removeDate.setPadding(dp(4),dp(12),dp(4),dp(5));
+        removeDate.setOnClickListener(v->due.setText(""));
+        add(layout,removeDate,0);
         EditText amount=input(layout,"Betrag in EUR",current==null?"0":String.format(java.util.Locale.US,"%.2f",current.optLong("amount_cents")/100.0),false);
         EditText paid=input(layout,"Bezahlt in EUR",current==null?"0":String.format(java.util.Locale.US,"%.2f",current.optLong("paid_cents")/100.0),false);
         add(layout,text("Status",12,true),12);
@@ -474,7 +521,15 @@ public class CloudWorkspaceActivity extends Activity {
             .setNegativeButton("Abbrechen",null).setPositiveButton("Speichern",null).create();
         dialog.setOnShowListener(unused->dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{
             String ttl=title.getText().toString().trim();if(ttl.isEmpty()){title.setError("Titel erforderlich");return;}
-            String dt=due.getText().toString().trim();if(!dt.isEmpty()&&!dt.matches("\\d{4}-\\d{2}-\\d{2}")){due.setError("Bitte JJJJ-MM-TT eingeben");return;}
+            String visibleDate=due.getText().toString().trim();
+            String dt="";
+            if(!visibleDate.isEmpty()){
+                try { dt=LocalDate.parse(visibleDate,DATE_DDMMYYYY).toString(); }
+                catch(Exception invalidDate){
+                    message("Ungültiger Termin. Bitte das Datum über den Kalender auswählen.");
+                    return;
+                }
+            }
             JSONObject payload=new JSONObject();try{
                 payload.put("title",ttl);payload.put("kind",current==null?kind:current.optString("kind",kind));
                 payload.put("customer",customer.getText().toString());payload.put("address",address.getText().toString());
