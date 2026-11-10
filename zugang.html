@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex,nofollow,noarchive">
+<meta name="referrer" content="no-referrer">
+<meta name="theme-color" content="#081d35">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src https://pqydohrjsuoxnzdoykgs.supabase.co; base-uri 'none'; form-action 'none'; object-src 'none'; frame-ancestors 'none'">
+<title>App-Zugang einrichten | Objekt All-In Services</title>
+<link rel="stylesheet" href="zugang.css">
+<script src="zugang.js" defer></script>
+</head>
+<body>
+<main class="wrap">
+<section class="panel" aria-labelledby="heading">
+<a class="brand" href="/" aria-label="Zur Objekt All-In Services Webseite"><img src="assets/objekt-all-in-logo-transparent.webp" alt="Objekt All-In Services" width="132" height="108"></a>
+<div class="eyebrow">OBJEKT ALL-IN SERVICES · TEAM-APP</div>
+<h1 id="heading">Zugang zur Firmen-App</h1>
+<p class="intro">Hier legst du dein persönliches Passwort fest, nachdem du die Einladung von Supabase geöffnet hast.</p>
+<div id="notice" class="notice" role="status" aria-live="polite">Wir prüfen deinen Einladungslink.</div>
+<form id="password-form" hidden>
+  <label for="password">Neues Passwort</label>
+  <input type="password" id="password" name="password" minlength="12" maxlength="256" autocomplete="new-password" required placeholder="Mindestens 12 Zeichen">
+  <label for="confirm">Passwort wiederholen</label>
+  <input type="password" id="confirm" name="confirm" minlength="12" maxlength="256" autocomplete="new-password" required placeholder="Passwort erneut eingeben">
+  <button type="submit" id="password-submit">Passwort festlegen</button>
+</form>
+<div id="reset-section" hidden>
+ <p>Ist deine Einladung schon bestätigt, aber du konntest kein Passwort festlegen? Fordere einen neuen, persönlichen Passwort-Link an.</p>
+ <form id="reset-form">
+  <label for="email">Deine E-Mail-Adresse</label>
+  <input type="email" name="email" id="email" autocomplete="email" inputmode="email" required placeholder="name@beispiel.de">
+  <button type="submit" id="reset-submit">Passwort-Link anfordern</button>
+ </form>
+ <p class="fine">Öffne danach den neuen Link aus deinem E-Mail-Postfach. Prüfe bei Bedarf den Spam-Ordner. Es gelten die Versandlimits von Supabase.</p>
+</div>
+<div id="success-section" hidden><p class="success">Dein Passwort ist gespeichert. Du kannst dich jetzt mit deiner E-Mail-Adresse und diesem Passwort in der Team-App anmelden.</p></div>
+<p class="fine">Dein Passwort wird ausschließlich verschlüsselt an den Authentifizierungsdienst unseres Supabase-Projekts übertragen. Gib dein Passwort nicht an andere weiter.</p>
+<a class="back" href="/">Zur Firmenwebseite</a>
+</section>
+</main>
+</body>
+</html>
