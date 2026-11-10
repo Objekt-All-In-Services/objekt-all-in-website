@@ -28,6 +28,9 @@ import android.widget.ScrollView;
 import android.widget.Spinner;
 import android.widget.TextView;
 import android.widget.ImageView;
+import android.widget.CalendarView;
+import java.util.HashSet;
+import java.util.Set;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.io.InputStream;
@@ -50,7 +53,7 @@ public class CloudWorkspaceActivity extends Activity {
     private static final int BG=Color.rgb(244,247,251), MUTED=Color.rgb(102,118,132);
     private static final String[] TABS={"Übersicht","Aufträge","Termine","Finanzen","Mehr"};
     private static final String PREF="cloud_workspace", KEY_ALIAS="objekt_all_in_cloud_tokens_v1";
-    private static final String[] KINDS={"Auftrag","Aufgabe","Termin","Kunde","Angebot","Rechnung","Einnahme","Fahrzeug","Gerät"};
+    private static final String[] KINDS={"Auftrag","Aufgabe","Termin","Kunde","Angebot","Rechnung","Einnahme","Ausgabe","Fahrzeug","Gerät"};
     private static final String[] STATUSES={"Offen","Geplant","In Arbeit","Erledigt","Abgeschlossen","Bezahlt","Storniert"};
     private final ExecutorService network=Executors.newSingleThreadExecutor();
     private SharedPreferences pref;
@@ -58,7 +61,7 @@ public class CloudWorkspaceActivity extends Activity {
     private JSONArray records=new JSONArray(),members=new JSONArray(),events=new JSONArray();
     private LinearLayout main;
     private boolean busy=false;
-    private String tab="Übersicht", subCategory="", financeCategory="Rechnung";
+    private String tab="Übersicht", detailKind="", selectedCalendarDate="";
     private long lastLoadAt=0L;
 
     @Override public void onCreate(Bundle bundle){
@@ -151,7 +154,7 @@ public class CloudWorkspaceActivity extends Activity {
                 add(cell,label,4);
                 nav.addView(cell,new LinearLayout.LayoutParams(0,dp(64),1));
                 cell.setContentDescription("Bereich "+item);
-                cell.setOnClickListener(v->{tab=item;subCategory="";render();});
+                cell.setOnClickListener(v->{tab=item;detailKind="";selectedCalendarDate="";render();});
             }
             root.addView(nav);
         }
@@ -346,13 +349,98 @@ public class CloudWorkspaceActivity extends Activity {
     }
     private void render(){
         if(access.isEmpty()){loginScreen();return;}
+        if(!detailKind.isEmpty()){
+            if(detailKind.equals("Finanzübersicht")){shell("Finanzübersicht");renderFinanceSummary();return;}
+            if(detailKind.equals("Änderungsprotokoll")){history();return;}
+            shell(detailKind);
+            add(main,button("← Zurück",()->{detailKind="";render();}),0);
+            showRecords(detailKind,detailKind,subtitleForKind(detailKind));
+            return;
+        }
         shell(tab);
         if(tab.equals("Übersicht")){renderOverview();return;}
         if(tab.equals("Aufträge")){showRecords("Aufträge","Auftrag","Alle Kundenaufträge mit Status und Zuständigkeit.");return;}
-        if(tab.equals("Termine")){showRecords("Termine","Termin","Einsätze und Termine im Blick behalten.");return;}
+        if(tab.equals("Termine")){renderCalendar();return;}
         if(tab.equals("Finanzen")){renderFinance();return;}
         renderMore();
     }
+    private String subtitleForKind(String category){
+        if(category.equals("Fahrzeug"))return "Fahrzeuge mit Kennzeichen, TÜV und Fahrzeugscheinfotos.";
+        if(category.equals("Kunde"))return "Kunden und Kontaktdaten gemeinsam verwalten.";
+        if(category.equals("Aufgabe"))return "Aufgaben planen, zuweisen und abhaken.";
+        if(category.equals("Gerät"))return "Geräte, Maschinen und Wartungen verwalten.";
+        if(category.equals("Ausgabe"))return "Betriebsausgaben mit Betrag erfassen.";
+        return "Gemeinsame Einträge erstellen und bearbeiten.";
+    }
+    private void openCategory(String category){
+        detailKind=category;render();
+    }
+    private String assignmentName(JSONObject record){
+        if(record.optBoolean("assigned_both",false))return "Silvan und Lion (beide)";
+        return memberName(record.optString("assigned_to",""));
+    }
+    private Set<String> invoicedOrderIds(){
+        Set<String> ids=new HashSet<>();
+        for(int i=0;i<records.length();i++){
+            JSONObject r=records.optJSONObject(i);
+            if(r!=null&&"Rechnung".equals(r.optString("kind"))){
+                String link=r.optString("linked_order_id","");
+                if(!link.isEmpty()&&!link.equals("null"))ids.add(link);
+            }
+        }
+        return ids;
+    }
+    private JSONObject recordById(String id){
+        for(int i=0;i<records.length();i++){
+            JSONObject r=records.optJSONObject(i);
+            if(r!=null&&id.equalsIgnoreCase(r.optString("id")))return r;
+        }
+        return null;
+    }
+    private long pendingCents(){
+        long due=0;
+        Set<String> invoiced=invoicedOrderIds();
+        for(int i=0;i<records.length();i++){
+            JSONObject r=records.optJSONObject(i);
+            if(r==null)continue;
+            String kind=r.optString("kind"), status=r.optString("status");
+            long outstanding=Math.max(0,r.optLong("amount_cents")-r.optLong("paid_cents"));
+            if(kind.equals("Auftrag") && status.equals("Abgeschlossen")
+               && !invoiced.contains(r.optString("id")))due+=outstanding;
+            if(kind.equals("Rechnung") && !status.equals("Bezahlt")){
+                String linked=r.optString("linked_order_id","");
+                if(linked.isEmpty()||linked.equals("null")){
+                    due+=outstanding;
+                }else{
+                    JSONObject order=recordById(linked);
+                    if(order!=null && order.optString("status").equals("Abgeschlossen"))due+=outstanding;
+                }
+            }
+        }
+        return due;
+    }
+    private long incomeCents(){
+        long sum=0;
+        Set<String> invoiced=invoicedOrderIds();
+        for(int i=0;i<records.length();i++){
+            JSONObject r=records.optJSONObject(i);
+            if(r==null)continue;
+            String type=r.optString("kind"),linked=r.optString("linked_order_id","");
+            if(type.equals("Auftrag")){
+                // Zahlungen aus Aufträgen, soweit keine eigene Rechnung die Zahlungen führt.
+                if(!invoiced.contains(r.optString("id")))sum+=Math.min(
+                    Math.max(0,r.optLong("paid_cents")),
+                    Math.max(0,r.optLong("amount_cents")));
+            }else if(type.equals("Rechnung")){
+                sum+=Math.min(Math.max(0,r.optLong("paid_cents")),Math.max(0,r.optLong("amount_cents")));
+            }else if(type.equals("Einnahme") && (linked.isEmpty()||linked.equals("null"))){
+                sum+=Math.max(0,r.optLong("amount_cents"));
+            }
+        }
+        return sum;
+    }
+    private long expensesCents(){return Math.max(0,sum("Ausgabe","amount_cents"));}
+    
     private int countKind(String category){
         int total=0;
         for(int i=0;i<records.length();i++){
@@ -378,83 +466,123 @@ public class CloudWorkspaceActivity extends Activity {
     }
     private void renderOverview(){
         heading("Startübersicht","Willkommen, "+memberName(userId)+". Alle gemeinsamen Firmendaten an einem Ort.");
-        LinearLayout a=horizontal();
-        LinearLayout left=card();metric(left,"Aufträge",String.valueOf(countKind("Auftrag")));
-        LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(0,-2,1);
-        a.addView(left,lp);
-        LinearLayout right=card();metric(right,"Termine",String.valueOf(countKind("Termin")));
+        LinearLayout row=horizontal();
+        LinearLayout jobs=card();metric(jobs,"Aufträge",String.valueOf(countKind("Auftrag")));
+        row.addView(jobs,new LinearLayout.LayoutParams(0,-2,1));
+        LinearLayout appointments=card();metric(appointments,"Termine",String.valueOf(countKind("Termin")));
         LinearLayout.LayoutParams rp=new LinearLayout.LayoutParams(0,-2,1);
-        rp.leftMargin=dp(10);a.addView(right,rp);
-        add(main,a,23);
-        LinearLayout fin=card();
-        metric(fin,"Offene Rechnungsbeträge",money(Math.max(0,sum("Rechnung","amount_cents")-sum("Rechnung","paid_cents"))));
-        add(main,fin,11);
-        TextView title=text("Schnellzugriff",19,true);title.setTextColor(NAVY);add(main,title,24);
-        cardLink("+ Auftrag erfassen","Ein neuer Auftrag für das gemeinsame Team",()->{kind="Auftrag";editor(null);});
-        cardLink("Aufträge ansehen",countKind("Auftrag")+" Aufträge gespeichert",()->{tab="Aufträge";render();});
-        cardLink("Kunden & Adressen",countKind("Kunde")+" Kunden gespeichert",()->{tab="Mehr";subCategory="Kunde";render();});
-        cardLink("Änderungsprotokoll","Nachsehen, wer welchen Eintrag geändert hat",this::history);
-        add(main,text("Änderungen von Silvan und Lion werden nach dem Speichern protokolliert. Zum Abrufen neuer Änderungen nach unten über „Aktualisieren“ oder beim erneuten Öffnen synchronisieren.",12,false),18);
-        add(main,button("⟳ Daten aktualisieren",this::load),14);
+        rp.leftMargin=dp(10);row.addView(appointments,rp);
+        add(main,row,23);
+        TextView head=text("Schnellzugriff",19,true);head.setTextColor(NAVY);add(main,head,25);
+        cardLink("+ Auftrag erfassen","Einen neuen Kundenauftrag anlegen",()->{kind="Auftrag";editor(null);});
+        cardLink("Aufträge ansehen","Aufträge und Zuständigkeiten",()->{tab="Aufträge";detailKind="";render();});
+        add(main,button("⟳ Aktualisieren",this::load),21);
     }
+    private void renderCalendar(){
+        heading("Termine","Alle gemeinsamen Termine im Monatskalender.");
+        CalendarView calendar=new CalendarView(this);
+        calendar.setFirstDayOfWeek(Calendar.MONDAY);
+        calendar.setBackground(shape(Color.WHITE,15));
+        if(!selectedCalendarDate.isEmpty()){
+            try{
+                LocalDate date=LocalDate.parse(selectedCalendarDate);
+                Calendar cal=Calendar.getInstance();
+                cal.set(date.getYear(),date.getMonthValue()-1,date.getDayOfMonth(),12,0);
+                calendar.setDate(cal.getTimeInMillis(),false,false);
+            }catch(Exception ignored){}
+        }
+        calendar.setOnDateChangeListener((view,year,month,day)->{
+            selectedCalendarDate=String.format(Locale.US,"%04d-%02d-%02d",year,month+1,day);
+            render();
+        });
+        add(main,calendar,17);
+        add(main,goldButton("+ Neuen Termin erstellen",()->{kind="Termin";editor(null);}),17);
+        if(!selectedCalendarDate.isEmpty()){
+            TextView label=text("Am "+displayDate(selectedCalendarDate),17,true);
+            add(main,label,21);
+        }else add(main,text("Alle Termine",17,true),21);
+        int n=0;
+        for(int i=0;i<records.length();i++){
+            JSONObject e=records.optJSONObject(i);
+            if(e==null||!"Termin".equals(e.optString("kind")))continue;
+            if(!selectedCalendarDate.isEmpty()&&!selectedCalendarDate.equals(e.optString("due_date")))continue;
+            recordCard(e);
+            n++;
+        }
+        if(n==0)add(main,text("Keine Termine für diese Auswahl.",14,false),16);
+        if(!selectedCalendarDate.isEmpty())
+            add(main,button("Alle Termine anzeigen",()->{selectedCalendarDate="";render();}),13);
+    }
+    
     private void showRecords(String title,String category,String subtitle){
         kind=category;
         heading(title,subtitle);
-        add(main,goldButton("+ "+(category.equals("Auftrag")?"Neuen Auftrag":category.equals("Termin")?"Neuen Termin":"Neuen Eintrag")+" erstellen",()->editor(null)),18);
-        int total=0;
+        add(main,goldButton("+ Neuen Eintrag erstellen",()->editor(null)),18);
+        int count=0;
         for(int i=0;i<records.length();i++){
-            JSONObject e=records.optJSONObject(i);
-            if(e==null||!category.equals(e.optString("kind")))continue;
-            total++;
-            LinearLayout row=card();
-            TextView name=text(e.optString("title","Ohne Titel"),17,true);
-            name.setTextColor(NAVY);add(row,name,0);
-            String customer=e.optString("customer","");
-            String status=e.optString("status","Offen");
-            String due=e.optString("due_date","");
-            String info=(customer.isEmpty()?"":customer+" · ")+status+(due.isEmpty()||due.equals("null")?"":" · "+displayDate(due));
-            TextView line=text(info,13,false);line.setTextColor(MUTED);add(row,line,7);
-            TextView owner=text("Zuständig: "+memberName(e.optString("assigned_to",""))+"  |  Bearbeitet: "+memberName(e.optString("updated_by","")),12,false);
-            owner.setTextColor(MUTED);add(row,owner,8);
-            row.setOnClickListener(v->editor(e));
-            add(main,row,12);
+            JSONObject entry=records.optJSONObject(i);
+            if(entry!=null&&category.equals(entry.optString("kind"))){recordCard(entry);count++;}
         }
-        if(total==0){
-            LinearLayout empty=card();
-            add(empty,text("Noch keine Einträge in diesem Bereich.",15,false),0);
-            add(main,empty,18);
-        }
+        if(count==0)add(main,text("Noch keine Einträge. Lege den ersten an.",14,false),19);
         add(main,button("⟳ Aktualisieren",this::load),18);
     }
-    private void financePick(String category){
-        financeCategory=category;tab="Finanzen";render();
+    private void recordCard(JSONObject entry){
+        LinearLayout row=card();
+        TextView name=text(entry.optString("title","Ohne Titel"),17,true);
+        add(row,name,0);
+        String category=entry.optString("kind");
+        String status=entry.optString("status","");
+        String due=displayDate(entry.optString("due_date",""));
+        String customer=entry.optString("customer","");
+        String summary=(customer.isEmpty()?"":customer+" · ")+status+(due.isEmpty()?"":" · "+due);
+        TextView line=text(summary,13,false);line.setTextColor(MUTED);add(row,line,7);
+        if(category.equals("Auftrag")||category.equals("Termin")||category.equals("Aufgabe")){
+            TextView who=text("Zuständig: "+assignmentName(entry),12,false);
+            who.setTextColor(MUTED);add(row,who,7);
+        }
+        if(category.equals("Auftrag")||category.equals("Rechnung")||category.equals("Einnahme")||category.equals("Ausgabe")){
+            TextView amount=text(money(entry.optLong("amount_cents")),15,true);
+            add(row,amount,7);
+        }
+        if(category.equals("Fahrzeug")){
+            JSONObject data=entry.optJSONObject("metadata");
+            if(data!=null){TextView plate=text("Kennzeichen: "+data.optString("kennzeichen","–")+"  ·  HU: "+displayDate(data.optString("hu_date","")),13,false);
+                add(row,plate,7);}
+            row.setOnClickListener(v->vehicleDetail(entry));
+        }else row.setOnClickListener(v->editor(entry));
+        add(main,row,11);
     }
+    private void financePick(String category){detailKind=category;render();}
     private void renderFinance(){
-        heading("Finanzen","Angebote, Rechnungen und Einnahmen im Überblick.");
-        LinearLayout balance=card();
-        metric(balance,"Offene Rechnungsbeträge",money(Math.max(0,sum("Rechnung","amount_cents")-sum("Rechnung","paid_cents"))));
-        add(main,balance,17);
-        cardLink("Angebote · "+countKind("Angebot"),"Erfasste Angebote anzeigen",()->financePick("Angebot"));
+        heading("Finanzen","Wähle einen Bereich, um alle Einträge auf einer eigenen Seite zu sehen.");
+        cardLink("Angebote · "+countKind("Angebot"),"Angebote erfassen und bearbeiten",()->financePick("Angebot"));
         cardLink("Rechnungen · "+countKind("Rechnung"),"Rechnungen und Teilzahlungen anzeigen",()->financePick("Rechnung"));
-        cardLink("Einnahmen · "+countKind("Einnahme"),"Erfasste Einnahmen anzeigen",()->financePick("Einnahme"));
-        showRecords(financeCategory,financeCategory,"Ausgewählt: "+financeCategory);
+        cardLink("Einnahmen · "+countKind("Einnahme"),"Einnahmen verwalten",()->financePick("Einnahme"));
+        cardLink("Ausgaben · "+countKind("Ausgabe"),"Kosten und Ausgaben eintragen",()->financePick("Ausgabe"));
     }
-    private void morePick(String category){
-        tab="Mehr";subCategory=category;render();
+    private void renderFinanceSummary(){
+        add(main,button("← Zurück zu Mehr",()->{detailKind="";tab="Mehr";render();}),0);
+        heading("Finanzübersicht","Zusammenfassung der erfassten Zahlungen und offenen Forderungen.");
+        LinearLayout earnings=card();metric(earnings,"Gesamteinnahmen",money(incomeCents()));add(main,earnings,16);
+        LinearLayout expenses=card();metric(expenses,"Gesamtausgaben",money(expensesCents()));add(main,expenses,10);
+        LinearLayout pending=card();metric(pending,"Offene Forderungen",money(pendingCents()));add(main,pending,10);
+        LinearLayout net=card();metric(net,"Überschuss",money(incomeCents()-expensesCents()));add(main,net,10);
+        add(main,text("Geplante Aufträge zählen nicht als offene Forderung. Abgeschlossene Aufträge zählen mit Restbetrag; bezahlte Aufträge nicht mehr. Zahlungen aus Aufträgen und eigenständige Einnahmen werden berücksichtigt. Erfasse denselben Zahlungseingang nicht noch einmal als zusätzliche Einnahme.",12,false),19);
     }
+    private void morePick(String category){tab="Mehr";detailKind=category;render();}
     private void renderMore(){
         heading("Weitere Bereiche","Gemeinsame Verwaltung für euren Firmenalltag.");
         cardLink("Aufgaben & Checklisten",countKind("Aufgabe")+" Einträge",()->morePick("Aufgabe"));
         cardLink("Kunden & Adressen",countKind("Kunde")+" Einträge",()->morePick("Kunde"));
         cardLink("Fuhrpark & Fahrzeuge",countKind("Fahrzeug")+" Einträge",()->morePick("Fahrzeug"));
         cardLink("Geräte & Maschinen",countKind("Gerät")+" Einträge",()->morePick("Gerät"));
-        cardLink("Änderungsprotokoll","Wer hat wann welchen Eintrag geändert?",this::history);
-        if(!subCategory.isEmpty())showRecords(subCategory,subCategory,"Gemeinsamer Team-Bereich");
-        TextView me=text("Dein Konto: "+memberName(userId),15,true);me.setTextColor(NAVY);add(main,me,23);
-        add(main,text("Die Anmeldung bleibt auf diesem Gerät gespeichert. Abmelden beendet deine Sitzung.",12,false),7);
-        add(main,button("Abmelden",()->new AlertDialog.Builder(this).setTitle("Abmelden").setMessage("Möchtest du dich wirklich abmelden?")
-            .setPositiveButton("Abmelden",(d,w)->{clear();members=new JSONArray();records=new JSONArray();events=new JSONArray();loginScreen();})
-            .setNegativeButton("Abbrechen",null).show()),15);
+        cardLink("Finanzübersicht","Einnahmen, Ausgaben, offene Forderungen und Überschuss",()->morePick("Finanzübersicht"));
+        cardLink("Änderungsprotokoll","Wer hat welchen Eintrag geändert?",()->morePick("Änderungsprotokoll"));
+        add(main,text("Angemeldet als "+memberName(userId),15,true),25);
+        add(main,button("Abmelden",()->new AlertDialog.Builder(this)
+            .setTitle("Abmelden").setMessage("Möchtest du deine Sitzung beenden?")
+            .setPositiveButton("Abmelden",(d,w)->{clear();members=new JSONArray();records=new JSONArray();events=new JSONArray();detailKind="";loginScreen();})
+            .setNegativeButton("Abbrechen",null).show()),16);
     }
     
     private static final DateTimeFormatter DATE_DDMMYYYY =
@@ -555,7 +683,7 @@ public class CloudWorkspaceActivity extends Activity {
     private void history(){
         shell("Änderungsprotokoll");
         heading("Wer hat was geändert?","Alle Änderungen werden über die bestätigte Anmeldung erfasst.");
-        add(main,goldButton("← Zurück zur Übersicht",()->{tab="Übersicht";render();}),15);
+        add(main,goldButton("← Zurück",()->{detailKind="";render();}),15);
         if(events.length()==0)add(main,text("Noch keine Änderungen vorhanden.",15,false),19);
         for(int i=0;i<events.length();i++){
             JSONObject e=events.optJSONObject(i);if(e==null)continue;
