@@ -5,7 +5,7 @@
 <title>Objekt All-In Services | Alles rund ums Objekt in Sachsen-Anhalt</title>
 <meta name="description" content="Objekt All-In Services aus Gerbstedt: Entrümpelung, Hausmeisterservice, Gartenpflege, Winterdienst, Fahrzeugüberführung, Gebäudereinigung. Auch als Auftragspartner für Unternehmen.">
 <meta name="theme-color" content="#071b35"><link rel="icon" href="favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="relaunch.css"><script src="relaunch.js" defer></script>
+<link rel="stylesheet" href="relaunch.css"><link rel="stylesheet" href="calculator-v2.css"><script src="relaunch.js" defer></script><script src="calculator-v2.js" defer></script>
 </head>
 <body>
 <a class="skip" href="#inhalt">Zum Inhalt springen</a>
@@ -36,9 +36,44 @@
 </div></div></section>
 <section class="section" id="rechner"><div class="shell split">
 <div><div class="eyebrow">3D-Entrümpelungsrechner</div><h2>Wie viel muss raus?</h2><p>Mit unserem einfachen Volumenrechner erhalten Sie eine erste Orientierung, wie viel Platz Ihr Hausrat ungefähr beanspruchen könnte. Das hilft uns bei der Planung des Transports.</p>
-<div class="cube-box"><div class="cube" aria-hidden="true"><div class="cube-face cube-front"><div class="cube-fill" id="cube-fill"></div></div><div class="cube-face cube-side"><div class="cube-fill" id="cube-fill-2"></div></div><div class="cube-face cube-top"></div></div><div class="cube-text">Anschauliche 3D-Füllstandsanzeige</div></div>
+<div class="volume-preview" id="volume-preview" data-level="2" aria-label="Interaktive Darstellung des Entrümpelungsvolumens">
+<div class="volume-preview-head"><span class="volume-preview-eyebrow">VOLUMENVORSCHAU</span><span class="volume-preview-tag" id="volume-stage-label">Normal eingerichtet</span></div>
+<div class="volume-stage">
+<svg viewBox="0 0 640 405" role="img" aria-label="Dreidimensionale schematische Raumdarstellung mit Kartons. Die Kartonmenge verändert sich passend zum Füllgrad.">
+<defs>
+<radialGradient id="v2halo"><stop stop-color="#d0e9f8"/><stop offset="1" stop-color="#edf8fd" stop-opacity="0"/></radialGradient>
+<linearGradient id="v2floor" x2="0" y2="1"><stop stop-color="#f7fcff"/><stop offset="1" stop-color="#c3e2f2"/></linearGradient>
+<linearGradient id="v2wallL" x2="1" y2="1"><stop stop-color="#d5edfc" stop-opacity=".8"/><stop offset="1" stop-color="#accfe2" stop-opacity=".42"/></linearGradient>
+<linearGradient id="v2wallR" x2="1" y2="1"><stop stop-color="#bbdaec" stop-opacity=".46"/><stop offset="1" stop-color="#6b9fbd" stop-opacity=".31"/></linearGradient>
+<symbol id="v2carton" viewBox="0 0 60 78"><path d="M1 20 30 3 59 20 30 37Z" fill="#f8dcb0" stroke="#ad8652" stroke-width="1.2"/><path d="M1 20 30 37 30 76 1 59Z" fill="#edc58c" stroke="#ad8652" stroke-width="1.2"/><path d="M30 37 59 20 59 60 30 76Z" fill="#cf9d62" stroke="#ad8652" stroke-width="1.2"/><path d="M17 11 45 28 M17 29 17 66" stroke="#ad8652" stroke-width="1.8" opacity=".5"/><path d="M30 37 30 76" stroke="#a77d47" stroke-width="1.5"/></symbol>
+</defs>
+<ellipse cx="321" cy="359" rx="232" ry="37" fill="#3e84a5" opacity=".12"/>
+<ellipse cx="315" cy="210" rx="262" ry="168" fill="url(#v2halo)"/>
+<path d="M115 123 320 225 320 343 115 241Z" fill="url(#v2wallL)"/>
+<path d="M320 225 524 121 524 242 320 343Z" fill="url(#v2wallR)"/>
+<path d="M115 241 320 343 524 242 320 140Z" fill="url(#v2floor)" stroke="#b6d3e4" stroke-width="1.5"/>
+<path d="M160 252 331 336 M205 271 374 321 M250 292 415 303 M298 313 462 282 M353 160 147 262 M395 181 190 284 M441 203 235 307" stroke="#a6cfdf" stroke-width="1" opacity=".22"/>
+<g class="volume-item is-visible" data-min-level="1"><use href="#v2carton" x="213" y="220" width="70" height="91"/></g>
+<g class="volume-item is-visible" data-min-level="1"><use href="#v2carton" x="294" y="225" width="75" height="98"/></g>
+<g class="volume-item is-visible" data-min-level="2"><use href="#v2carton" x="364" y="203" width="66" height="86"/></g>
+<g class="volume-item is-visible" data-min-level="2"><use href="#v2carton" x="245" y="167" width="65" height="85"/></g>
+<g class="volume-item" data-min-level="3"><use href="#v2carton" x="312" y="166" width="72" height="94"/></g>
+<g class="volume-item" data-min-level="3"><use href="#v2carton" x="404" y="156" width="58" height="76"/></g>
+<g class="volume-item" data-min-level="3"><use href="#v2carton" x="193" y="170" width="57" height="75"/></g>
+<g class="volume-item" data-min-level="4"><use href="#v2carton" x="279" y="106" width="72" height="94"/></g>
+<g class="volume-item" data-min-level="4"><use href="#v2carton" x="352" y="104" width="66" height="87"/></g>
+<g class="volume-item" data-min-level="4"><use href="#v2carton" x="235" y="106" width="54" height="72"/></g>
+<path d="M115 122 320 225 524 121 M115 122V241L320 343 524 242V121 M320 225V343" class="volume-outline" stroke-opacity=".85"/>
+<path d="M115 122 320 20 524 121" fill="none" stroke="#6cb4d2" stroke-width="1.9" stroke-dasharray="7 8" opacity=".45"/>
+<path d="M320 20V225" stroke="#6cb4d2" stroke-width="1.9" stroke-dasharray="7 8" opacity=".3"/>
+<circle cx="115" cy="122" r="6" fill="#d4a753"/><circle cx="320" cy="225" r="6" fill="#d4a753"/><circle cx="524" cy="121" r="6" fill="#d4a753"/>
+</svg>
+</div>
+<div class="volume-preview-bottom"><div class="volume-preview-stats"><span>Geschätzter Füllgrad<br><strong id="volume-stage-percent">28 % Füllgrad</strong></span><span style="text-align:right">Geschätztes Volumen<br><strong id="volume-stage-m3">42 m³</strong></span></div><div class="volume-preview-meter"><span id="volume-stage-meter"></span></div></div>
+<p class="volume-preview-footnote">Schematische Vorschau. Tatsächliches Räumungsvolumen hängt vom Hausrat ab.</p>
+</div>
 </div><div class="glass"><span class="pill">Unverbindliche Schätzung</span><h3>Entrümpelungsvolumen berechnen</h3><p>Tragen Sie die Fläche und den ungefähren Füllgrad ein.</p>
-<div class="calc-form"><label class="field">Fläche in m²<input id="floor" type="number" min="1" max="2000" value="60" inputmode="decimal"></label><label class="field">Raumhöhe in m<input id="ceiling" type="number" min="1" max="5" step="0.1" value="2.5" inputmode="decimal"></label><label class="field wide">Wie voll sind die Räume?<select id="filling"><option value="wenig">Leicht gefüllt, wenige Möbel</option><option value="normal" selected>Normal eingerichtet</option><option value="voll">Vollgestellt, viele Möbel und Kartons</option><option value="sehrvoll">Sehr voll, stark zugestellt</option></select></label></div>
+<div class="calc-form"><label class="field">Fläche in m²<input id="floor" type="number" min="1" max="2000" value="60" inputmode="decimal"></label><label class="field">Raumhöhe in m<input id="ceiling" type="number" min="1" max="5" step="0.1" value="2.5" inputmode="decimal"></label><label class="field wide">Wie voll sind die Räume?<select id="filling"><option value="wenig">Leicht gefüllt, wenige Möbel</option><option value="normal" selected>Normal eingerichtet</option><option value="voll">Vollgestellt, viele Möbel und Kartons</option><option value="sehrvoll">Sehr voll, stark zugestellt</option></select></label><div class="fill-slider-wrap"><label for="fill-slider"><span>Füllstand einstellen</span><span id="fill-slider-hint">Vorschau passt sich direkt an</span></label><input type="range" id="fill-slider" min="1" max="4" step="1" value="2" aria-label="Füllgrad der Räumlichkeiten"><div class="fill-slider-ticks"><span>Wenig</span><span>Normal</span><span>Voll</span><span>Sehr voll</span></div></div></div>
 <div class="calc-result"><div><span>Geschätztes Volumen</span><p id="volume-detail">Die tatsächliche Menge wird bei einer Besichtigung genauer eingeschätzt.</p></div><strong id="volume-result" aria-live="polite">– m³</strong></div><p class="fineprint">Keine verbindliche Container- oder Preisberechnung. Zerlegung, Keller, Sperrmüll und Transportwege können die tatsächliche Menge verändern.</p><a class="btn dark" href="#kontakt">Mit diesen Angaben Angebot anfragen ↗</a></div>
 </div></section>
 <section class="section weather" id="wetter"><div class="shell split"><div><div class="eyebrow">Winterdienst · Wetter-Wächter</div><h2>Wenn es glatt wird,<br>zählt Vorbereitung.</h2><p>Wir unterstützen Privatkunden und Unternehmen bei der Schneeräumung, beim Streudienst und mit abgestimmten Kontrollfahrten. Die Wetterübersicht hilft bei der ersten Orientierung.</p><ul class="detail-list"><li>Gehwege, Höfe, Parkflächen und Zufahrten</li><li>Gewerbeobjekte und Wohnanlagen</li><li>Einmalige Einsätze oder saisonale Betreuung</li></ul><a href="#kontakt" class="btn">Winterdienst anfragen ↗</a></div>
