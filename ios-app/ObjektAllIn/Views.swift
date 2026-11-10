@@ -73,13 +73,15 @@ struct MainTabs: View {
     var body: some View {
         TabView {
             NavigationStack { DashboardView() }
-                .tabItem { Label("Übersicht", systemImage: "square.grid.2x2.fill") }
-            NavigationStack { RecordListView() }
+                .tabItem { Label("Übersicht", systemImage: "house.fill") }
+            NavigationStack { RecordListView(fixedKind: "Auftrag") }
                 .tabItem { Label("Aufträge", systemImage: "shippingbox.fill") }
-            NavigationStack { ActivityView() }
-                .tabItem { Label("Änderungen", systemImage: "clock.arrow.circlepath") }
-            NavigationStack { SettingsView() }
-                .tabItem { Label("Mehr", systemImage: "gearshape.fill") }
+            NavigationStack { RecordListView(fixedKind: "Termin") }
+                .tabItem { Label("Termine", systemImage: "calendar") }
+            NavigationStack { FinanceDashboardView() }
+                .tabItem { Label("Finanzen", systemImage: "eurosign.circle") }
+            NavigationStack { MoreTeamView() }
+                .tabItem { Label("Mehr", systemImage: "line.3.horizontal") }
         }
     }
 }
@@ -140,14 +142,21 @@ struct MetricCard: View {
 
 struct RecordListView: View {
     @EnvironmentObject var store: Workspace
-    @State private var selectedKind = "Auftrag"
+    let fixedKind: String?
+    @State private var selectedKind: String
+    init(fixedKind: String? = nil) {
+        self.fixedKind = fixedKind
+        _selectedKind = State(initialValue: fixedKind ?? "Auftrag")
+    }
     @State private var showingNew = false
     @State private var search = ""
     var body: some View {
         VStack(spacing: 0) {
-            Picker("Bereich", selection: $selectedKind) {
-                ForEach(recordKinds, id: \.self) { Text($0).tag($0) }
-            }.pickerStyle(.menu).padding(.horizontal)
+            if fixedKind == nil {
+                Picker("Bereich", selection: $selectedKind) {
+                    ForEach(recordKinds, id: \.self) { Text($0).tag($0) }
+                }.pickerStyle(.menu).padding(.horizontal)
+            }
             List {
                 ForEach(store.records.filter { record in
                     record.kind == selectedKind && (search.isEmpty || record.title.localizedCaseInsensitiveContains(search) || record.customer.localizedCaseInsensitiveContains(search))
@@ -282,6 +291,88 @@ struct RecordEditor: View {
                 }.disabled(form.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || saving)
             }
         }
+    }
+}
+
+struct FinanceDashboardView: View {
+    @EnvironmentObject private var store: Workspace
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                Text("Finanzen").font(.largeTitle.bold()).foregroundStyle(navy)
+                Text("Angebote, Rechnungen und Einnahmen im Blick.")
+                    .font(.subheadline).foregroundStyle(.secondary)
+                MetricCard(name: "Offene Rechnungsbeträge", value: store.invoicesOpen().euros, icon: "eurosign.circle")
+                NavigationLink {
+                    RecordListView(fixedKind: "Angebot")
+                } label: {
+                    MoreLinkRow(title: "Angebote", subtitle: "Gemeinsame Angebote", icon: "doc.text")
+                }.buttonStyle(.plain)
+                NavigationLink {
+                    RecordListView(fixedKind: "Rechnung")
+                } label: {
+                    MoreLinkRow(title: "Rechnungen", subtitle: "Rechnungen und Teilzahlungen", icon: "eurosign.circle")
+                }.buttonStyle(.plain)
+                NavigationLink {
+                    RecordListView(fixedKind: "Einnahme")
+                } label: {
+                    MoreLinkRow(title: "Einnahmen", subtitle: "Erfasste Zahlungseingänge", icon: "chart.line.uptrend.xyaxis")
+                }.buttonStyle(.plain)
+                Button("Aktualisieren") { Task { await store.reload() } }
+                    .frame(maxWidth: .infinity).buttonStyle(.bordered)
+            }.padding()
+        }.background(Color(.systemGroupedBackground))
+            .navigationTitle("Finanzen")
+            .refreshable { await store.reload() }
+    }
+}
+struct MoreLinkRow: View {
+    let title: String
+    let subtitle: String
+    let icon: String
+    var body: some View {
+        HStack(spacing: 14) {
+            Image(systemName: icon).font(.title2).foregroundStyle(gold).frame(width: 38)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title).font(.headline).foregroundStyle(navy)
+                Text(subtitle).font(.subheadline).foregroundStyle(.secondary)
+            }
+            Spacer()
+            Image(systemName: "chevron.right").foregroundStyle(.secondary)
+        }.padding(17).frame(maxWidth: .infinity)
+            .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 16))
+    }
+}
+struct MoreTeamView: View {
+    @EnvironmentObject private var store: Workspace
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 13) {
+                Text("Weitere Bereiche").font(.largeTitle.bold()).foregroundStyle(navy)
+                Text("Alle Daten gehören zum gemeinsamen Team-Arbeitsraum.")
+                    .font(.subheadline).foregroundStyle(.secondary)
+                NavigationLink { RecordListView(fixedKind: "Aufgabe") } label: {
+                    MoreLinkRow(title: "Aufgaben & Checklisten", subtitle: "Gemeinsame Aufgaben", icon: "checklist")
+                }
+                NavigationLink { RecordListView(fixedKind: "Kunde") } label: {
+                    MoreLinkRow(title: "Kunden & Adressen", subtitle: "Kundenkontakte verwalten", icon: "person.2")
+                }
+                NavigationLink { RecordListView(fixedKind: "Fahrzeug") } label: {
+                    MoreLinkRow(title: "Fuhrpark & Fahrzeuge", subtitle: "Fahrzeugakten", icon: "car")
+                }
+                NavigationLink { RecordListView(fixedKind: "Gerät") } label: {
+                    MoreLinkRow(title: "Geräte & Maschinen", subtitle: "Maschinenübersicht", icon: "wrench.and.screwdriver")
+                }
+                NavigationLink { ActivityView() } label: {
+                    MoreLinkRow(title: "Änderungsprotokoll", subtitle: "Wer hat was geändert?", icon: "clock.arrow.circlepath")
+                }
+                NavigationLink { SettingsView() } label: {
+                    MoreLinkRow(title: "Konto & Abmelden", subtitle: "Angemeldet als \(store.currentName)", icon: "person.crop.circle")
+                }
+            }.padding()
+        }.buttonStyle(.plain)
+            .background(Color(.systemGroupedBackground))
+            .navigationTitle("Mehr")
     }
 }
 
