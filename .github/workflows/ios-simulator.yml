@@ -1,0 +1,29 @@
+name: iPhone App Buildcheck
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'ios-app/**'
+      - '.github/workflows/ios-simulator.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  simulator:
+    runs-on: macos-15
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - name: Xcode prüfen
+        run: xcodebuild -version
+      - name: XcodeGen installieren
+        run: brew install xcodegen
+      - name: Natives Xcode-Projekt generieren
+        working-directory: ios-app
+        run: xcodegen generate
+      - name: iPhone-Simulator-App bauen (ohne Signatur)
+        working-directory: ios-app
+        run: |
+          xcodebuild -project ObjektAllIn.xcodeproj -scheme ObjektAllIn -configuration Debug \
+          -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' \
+          CODE_SIGNING_ALLOWED=NO build

@@ -265,6 +265,8 @@ public class MainActivity extends Activity {
     }
     private void showMore(){
         title("Weitere Bereiche","Alles Weitere für den Firmenalltag.");
+        add(page,action("☁ Gemeinsamer Team-Arbeitsraum (Login)",true,()->startActivity(new Intent(this,CloudWorkspaceActivity.class))),0);
+        add(page,text("Getrennte Anmeldung für Silvan und Lion, gemeinsame Aufträge und Änderungsprotokoll. Benötigt die Online-Datenbank.",12,MUTED,false),8);
         quick(Entry.TASK,"Aufgaben & Checklisten","✓");
         quick(Entry.CLIENT,"Kunden & Adressen","♙");
         quick(Entry.VEHICLE,"Fuhrpark & Fahrzeugakten","▰");

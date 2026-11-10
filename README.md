@@ -1,26 +1,26 @@
-# Objekt All-In Services – eigenständige Website
+# Objekt All-In Services · Native Firmen-Apps
 
-Komplett statische Website ohne STRATO-Editor, Baukasten, externe JavaScript-Pakete oder Abo-Software.
+Eigenständiges Projekt für die GbR, mit getrennter Anmeldung für **Silvan** und **Lion**, gemeinsamer Datenbank und unveränderbarem Änderungsprotokoll.
 
-## Inhalt
-- `index.html` Startseite, Leistungen, Über uns, Ablauf
-- `kontakt.html` Kontaktseite mit Kontaktformular (öffnet das E-Mail-Programm, **kein** serverseitiger Versand)
-- `impressum.html` Impressum
-- `datenschutz.html` vor Veröffentlichung rechtlich prüfen (Cloudflare, Cookies, optionale Fremddienste)
-- `styles.css` Farben, Schriften und responsives Design
-- `script.js` Handy-Menü, Jahreszahl und Formular
-- `favicon.svg` eigenes Seitensymbol
-- `_headers` optionale Cloudflare Pages Sicherheits-Header
+| Bereich | Status |
+|---|---|
+| Android | Bisherige lokale App vorhanden; neuer Cloud-Arbeitsraum ist als native Android-Activity implementiert. Eine neue APK muss erstellt und getestet werden. |
+| iOS | Native SwiftUI-App mit Login, Übersicht, Aufträgen, Aufgaben, Kunden, Terminen, Finanzübersichten und Audit-Ansicht. Quellcode vorhanden; noch kein signierter iPhone-Build. |
+| Synchronisation | Supabase SQL-Datenbank und Zugriffsschutz implementiert; **noch nicht eingerichtet oder produktiv verbunden**. |
+| Änderungsprotokoll | PostgreSQL-Trigger protokolliert Login-Benutzer, Zeit, Vorher-/Nachher-Daten. App zeigt zuletzt geänderte Einträge. |
+| Benutzerrollen | Silvan: `admin`, Lion: `manager`; beim Backend-Setup mit echten UUIDs freizuschalten. |
 
-## Veröffentlichen über Cloudflare Pages
-1. In deinem eigenen GitHub-Konto ein neues Repository erstellen, etwa `objekt-all-in-website`, und die Dateien ins Stammverzeichnis hochladen.
-2. In Cloudflare auf **Workers & Pages**, danach **Create / Pages / Connect to Git** gehen, eigenes Repository auswählen.
-3. Als Framework **None** auswählen. Build-Befehl leer lassen. Als Ausgabeordner `.` (Punkt) angeben.
-4. Erst nach erfolgreichem Test die Domain `objekt-services.com` unter **Custom domains** verknüpfen. Bestehende E-Mail-DNS-Einträge (MX, SPF, DKIM, DMARC) nicht versehentlich löschen.
-5. Danach genügt eine Änderung in GitHub: Cloudflare veröffentlicht sie bei aktivierter Git-Integration automatisch.
+## Start
 
-## Wichtig
-- Dies ist ein eigenständiger erster Entwurf, keine pixelgenaue Kopie der Kollegenseite. Deren veröffentlichte URL war beim Erstellen nicht abrufbar.
-- Das Kontaktformular öffnet eine vorbereitete E-Mail; es versendet noch keine Nachricht im Hintergrund. Für echtes Formular ohne E-Mail-Programm später Cloudflare Worker, Turnstile und E-Mail-Dienst integrieren.
-- Impressum und Datenschutzerklärung bitte für die endgültige Hosting-/Formular-Konfiguration fachlich prüfen.
-- Keine Mitarbeiter-/Bewerbungsseite eingebaut.
+1. `backend/README.md` für die Einrichtung der zentralen Datenbank lesen.
+2. `ios-app/README.md` für iPhone/TestFlight lesen.
+3. Android-Projekt `android-app` mit Android Studio oder dem Workflow `Android APK erstellen` bauen.
+4. Mit zwei getrennten Testkonten anmelden. Einen Test-Auftrag auf Android erstellen, auf iPhone aktualisieren, verändern, und unter **Änderungen** den jeweiligen Bearbeiter prüfen.
+
+## Nicht als produktionsbereit ausgeben
+
+Ohne Supabase-Projekt, Benutzerfreigaben und iOS-Code-Signierung existiert **noch keine** funktionierende Zwei-Handy-Synchronisation. Die Android-v1.0-APK bleibt zunächst offline und kann nicht mit dem iPhone synchronisieren. Die Android-v1.1-Cloud-Ansicht verwaltet eigene Online-Einträge; bestehende Offline-Daten werden nicht automatisch migriert.
+
+## Sicherheit
+
+Unveröffentlichte Kundendaten nur in einer geschützten Datenbank speichern. Keine Passwörter/Secret Keys in den Quellcode. Vor produktivem Einsatz DSGVO/AVV und Sicherungskonzept prüfen; erst auf zwei realen Geräten testen.

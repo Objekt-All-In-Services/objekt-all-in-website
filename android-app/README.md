@@ -17,7 +17,7 @@ Eine **native Android-App in Java**, keine Web-App und keine WebView. Entwurf 1.
 
 ## Grenzen der ersten Version
 
-Die Datenspeicherung ist **lokal auf dem jeweiligen Android-Gerät**. Eine automatische Synchronisierung zwischen den Smartphones von Silvan und Lion ist **noch nicht implementiert**; die Profilwahl ist kein Login. Für zentrale, rollenbasierte Zusammenarbeit ist eine sichere Backend-Anbindung nötig. Finanzbereiche sind organisatorische Übersichten, keine rechtsverbindliche Rechnungsstellung oder Buchhaltung. Datensicherung im ZIP-Format vor Gerätetausch durchführen.
+Die Datenspeicherung ist **lokal auf dem jeweiligen Android-Gerät**. Die bisherige Offline-Ansicht bleibt lokal und die Profilwahl dort ist kein Login. **Neu:** Unter „Mehr → Gemeinsamer Team-Arbeitsraum“ gibt es einen nativen Online-Bereich mit getrenntem Login für Silvan und Lion. Dieser funktioniert erst nach Einrichtung des Supabase-Backends; er importiert keine Offline-Daten automatisch. Für zentrale, rollenbasierte Zusammenarbeit ist eine sichere Backend-Anbindung nötig. Finanzbereiche sind organisatorische Übersichten, keine rechtsverbindliche Rechnungsstellung oder Buchhaltung. Datensicherung im ZIP-Format vor Gerätetausch durchführen.
 
 ## Mit Android Studio bauen
 
@@ -39,3 +39,8 @@ Für eine spätere Veröffentlichung im Play Store oder reguläre Verteilung wir
 - Zugriff auf die App ist nicht zusätzlich per PIN geschützt; Android-Gerätesperre verwenden
 
 © Objekt All-In Services GbR. Native Android-Projektversion 1.0.
+
+
+## Neuer gemeinsamer Team-Arbeitsraum (Android 1.1)
+
+Nach der Backend-Einrichtung über **Mehr → Gemeinsamer Team-Arbeitsraum** öffnen, mit persönlichem Konto anmelden, Cloud-Einträge bearbeiten und unter **Änderungen** die Bearbeiterhistorie prüfen. Auth-Tokens werden mit dem Android Keystore verschlüsselt. Der neue Cloud-Bereich und die alte Offline-Verwaltung sind **getrennte Datenbestände**.

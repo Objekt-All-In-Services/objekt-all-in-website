@@ -1,0 +1,25 @@
+name: ObjektAllIn
+options:
+  bundleIdPrefix: de.objektallin
+  deploymentTarget:
+    iOS: '17.0'
+settings:
+  base:
+    SWIFT_VERSION: '5.9'
+    TARGETED_DEVICE_FAMILY: '1,2'
+    GENERATE_INFOPLIST_FILE: YES
+    INFOPLIST_KEY_CFBundleDisplayName: 'Objekt All-In Services'
+    INFOPLIST_KEY_UIApplicationSceneManifest_Generation: YES
+    CODE_SIGN_STYLE: Automatic
+    DEVELOPMENT_TEAM: ''
+targets:
+  ObjektAllIn:
+    type: application
+    platform: iOS
+    sources:
+      - path: ObjektAllIn
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: de.objektallin.services.ios
+        ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS: 'NO'
+        SUPPORTS_MACCATALYST: NO
