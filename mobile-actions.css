@@ -1,0 +1,42 @@
+/* Dauerhaft sichtbare mobile Kontaktleiste */
+.mobile-action-bar{display:none}
+@media(max-width:780px){
+  html{scroll-padding-bottom:112px}
+  body{padding-bottom:calc(88px + env(safe-area-inset-bottom,0px))}
+  .mobile-action-bar{
+    color-scheme:dark;
+    position:fixed;bottom:0;left:0;right:0;z-index:1100;
+    display:flex;align-items:center;gap:12px;
+    padding:10px max(15px,env(safe-area-inset-right,0px)) calc(10px + env(safe-area-inset-bottom,0px)) max(15px,env(safe-area-inset-left,0px));
+    background:#061538!important;
+    border-top:1px solid rgba(199,216,243,.28);
+    box-shadow:0 -9px 22px rgba(1,12,33,.22);
+    font-family:system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;
+  }
+  .mobile-action-bar a{
+    box-sizing:border-box;min-width:0;flex:1;
+    display:inline-flex;align-items:center;justify-content:center;gap:10px;
+    min-height:54px;padding:12px 10px;
+    border-radius:999px;text-decoration:none!important;
+    font-size:clamp(15px,4.2vw,19px);font-weight:780;line-height:1.15;
+    white-space:nowrap;text-align:center;
+    -webkit-tap-highlight-color:transparent;
+  }
+  .mobile-action-bar .mobile-call{
+    color:#fff!important;-webkit-text-fill-color:#fff;
+    background:linear-gradient(180deg,#ec860e,#be5100)!important;
+    border:1px solid #ff9c28;
+  }
+  .mobile-action-bar .mobile-inquiry{
+    color:#fff!important;-webkit-text-fill-color:#fff;
+    background:#071942!important;border:2px solid #dae8ff;
+  }
+  .mobile-action-bar .mobile-call svg{flex:0 0 20px;width:20px;height:20px;stroke:#fff;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+  .mobile-action-bar a:focus-visible{outline:3px solid #ffd86f;outline-offset:2px}
+  .mobile-action-bar a:active{filter:brightness(.92)}
+  #kontakt{scroll-margin-top:95px}
+}
+@media(max-width:360px){
+  .mobile-action-bar{gap:8px;padding-left:10px;padding-right:10px}
+  .mobile-action-bar a{font-size:15px;gap:7px;padding:11px 6px}
+}
