@@ -20,7 +20,7 @@ function createCustomerWizard(){
  root.appendChild(controls);grid.replaceWith(root);
  let step=0;const labels=['Leistung wählen','Auftrag beschreiben','Kontaktdaten'];
  function show(n){step=Math.max(0,Math.min(2,n));panels.forEach((p,i)=>p.hidden=i!==step);$('#wizard-label').textContent='Schritt '+(step+1)+' von 3 · '+labels[step];$('#wizard-progress').style.width=((step+1)/3*100)+'%';back.hidden=step===0;next.hidden=step===2;if(submit)submit.hidden=step!==2}
- function advance(){for(const fld of $('input,select,textarea',panels[step])){if(!fld.reportValidity())return}show(step+1)}
+ function advance(){for(const fld of $$('input,select,textarea',panels[step])){if(!fld.reportValidity())return}show(step+1)}
  back.addEventListener('click',()=>show(step-1));next.addEventListener('click',advance);
  f.addEventListener('submit',event=>{if(step<2){event.preventDefault();event.stopImmediatePropagation();advance()}},true);
  show(0);
